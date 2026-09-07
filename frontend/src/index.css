@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Design Tokens Officiels ZIHAN */
+    --zihan-blue: #1B3D87;
+    --zihan-blue-secondary: #1D5AA5;
+    --zihan-red: #EA4E52;
+    --zihan-red-accent: #EF4D52;
+
+    --surface: #FFFFFF;
+    --surface-secondary: #EEF3F9;
+
+    --text-primary: #162033;
+    --text-secondary: #667085;
+
+    --border-color: #DCE3EC;
+
+    --success: #16A34A;
+    --warning: #F59E0B;
+    --danger: #DC2626;
+    --info: #2563EB;
+
+    /* Semantic HSL tokens */
+    --background: 216 43% 98%;
+    --foreground: 220 39% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 39% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 39% 15%;
+
+    /* Bleu ZIHAN #1B3D87 */
+    --primary: 221 67% 32%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Bleu secondaire doux #EEF3F9 */
+    --secondary: 214 40% 96%;
+    --secondary-foreground: 213 70% 38%;
+
+    --muted: 214 40% 96%;
+    --muted-foreground: 220 13% 46%;
+
+    /* Rouge accent ZIHAN #EF4D52 */
+    --accent: 358 83% 63%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Rouge principal ZIHAN #EA4E52 */
+    --destructive: 358 79% 61%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 28% 89%;
+    --input: 214 28% 89%;
+    --ring: 221 67% 32%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222 52% 9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 45% 14%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 45% 14%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 75% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 35% 20%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 220 30% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 358 83% 63%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 358 79% 61%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 30% 22%;
+    --input: 220 30% 22%;
+    --ring: 217 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground transition-colors duration-200;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Print CSS Optimizations for Official Documents */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #162033 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide navigation, sidebar, buttons, topbar during document print */
+  header, aside, nav, .no-print, button, .print\\:hidden {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .print-document {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
