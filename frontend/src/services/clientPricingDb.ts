@@ -2,47 +2,23 @@ import { type ClientPricingRule } from '@/types';
 
 const LOCAL_CLIENT_PRICING_KEY = 'zihan_client_pricing_rules';
 
-export const DEFAULT_PRICING_RULES: ClientPricingRule[] = [
-  {
-    id: 'pr-001',
-    client_name: 'Boutique Express Mode',
-    company_name: 'Boutique Express Mode SARL',
-    flat_rate: 8.0,
-    custom_note: 'Convention ZIHAN — tarif unique toute Tunisie',
-    is_active: true,
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'pr-002',
-    client_name: 'Tech Express TN',
-    company_name: 'Tech Express TN',
-    flat_rate: 9.0,
-    custom_note: 'Électronique — tarif négocié',
-    is_active: true,
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'pr-003',
-    client_name: 'Parfumerie Alyssa',
-    company_name: 'Alyssa Parfums & Cosmétiques',
-    flat_rate: 7.0,
-    custom_note: 'Remise grand volume (>100 colis/mois)',
-    is_active: true,
-    updated_at: new Date().toISOString(),
-  },
-];
+export const DEFAULT_PRICING_RULES: ClientPricingRule[] = [];
 
 // Helper to get local cache
 export function getLocalClientPricing(): ClientPricingRule[] {
   try {
     const raw = localStorage.getItem(LOCAL_CLIENT_PRICING_KEY);
     if (!raw) {
-      localStorage.setItem(LOCAL_CLIENT_PRICING_KEY, JSON.stringify(DEFAULT_PRICING_RULES));
-      return DEFAULT_PRICING_RULES;
+      return [];
     }
-    return JSON.parse(raw) as ClientPricingRule[];
+    const parsed = JSON.parse(raw) as ClientPricingRule[];
+    const clean = parsed.filter((r) => !r.id?.startsWith('pr-00'));
+    if (clean.length !== parsed.length) {
+      localStorage.setItem(LOCAL_CLIENT_PRICING_KEY, JSON.stringify(clean));
+    }
+    return clean;
   } catch {
-    return DEFAULT_PRICING_RULES;
+    return [];
   }
 }
 

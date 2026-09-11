@@ -26,7 +26,7 @@
 - **📍 Adresse officielle** : Rue des anémones - Nouvelle Médina, Ben Arous, Tunisie
 - **📞 Téléphones** : `+216 27 394 418` / `+216 27 394 137`
 - **💬 WhatsApp Support** : `+216 27 394 418`
-- **✉️ Email officiel** : `samiAyed1965@gmail.com`
+- **✉️ Email officiel** : `samiayed1965@gmail.com`
 - **🌐 Portail Web** : `www.zihan.tn`
 
 ---
@@ -265,13 +265,11 @@ npm run dev:frontend    # Accessible sur http://localhost:5173
 npm run dev:backend     # Accessible sur http://localhost:5000
 ```
 
-### 5. Comptes de Démonstration Intégrés
+### 5. Compte Super Admin Officiel
 
 | Rôle | Email | Mot de passe | Accès / Portail |
 |---|---|---|---|
-| **Administrateur** | `admin@zihan.tn` | `Password123!` | `/admin` (Supervision globale) |
-| **Livreur** | `livreur@zihan.tn` | `Password123!` | `/driver` (Tournée mobile) |
-| **Client Expéditeur** | `client@zihan.tn` | `Password123!` | `/client` (Expéditions & Bons) |
+| **Super Admin** | `samiayed1965@gmail.com` | `Sami1234` | `/admin` (Supervision globale) |
 
 ---
 

@@ -602,7 +602,7 @@ export const ZihanDeliveryNoteTemplate: React.FC<ZihanDeliveryNoteTemplateProps>
               📞 27 394 418 / 27 394 137 &nbsp;•&nbsp; 💬 WhatsApp : 27 394 418
             </p>
             <p style={{ margin: '2px 0 0 0', fontWeight: 600, color: '#1B3D87' }}>
-              ✉️ samiAyed1965@gmail.com &nbsp;•&nbsp; MF : 1845239/M/A/000
+              ✉️ samiayed1965@gmail.com &nbsp;•&nbsp; MF : 1845239/M/A/000
             </p>
           </div>
 

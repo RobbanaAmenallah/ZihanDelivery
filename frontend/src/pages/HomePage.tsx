@@ -314,8 +314,10 @@ export const HomePage: React.FC = () => {
           </Card>
 
           <Card className="flex flex-col items-center justify-center p-6 text-center space-y-3 bg-[#1B3D87] text-white">
-            <ZihanOfficialLogo size="lg" variant="monochrome" showTagline={true} />
-            <p className="text-[11px] font-bold text-white/80">Version Monochrome Inverse</p>
+            <div className="p-2.5 bg-white rounded-xl shadow-md">
+              <ZihanOfficialLogo size="lg" variant="horizontal" showTagline={true} />
+            </div>
+            <p className="text-[11px] font-bold text-white/80">Support Fond Bleu Foncé</p>
           </Card>
         </div>
       </section>

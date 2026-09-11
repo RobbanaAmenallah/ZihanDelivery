@@ -19,7 +19,19 @@ export interface DbStatus {
 function getLocalCache(): UserProfile[] {
   try {
     const cached = localStorage.getItem(LOCAL_USERS_KEY);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsed = JSON.parse(cached) as UserProfile[];
+      const clean = parsed.filter(
+        (u) =>
+          u.email !== 'admin@zihan.tn' &&
+          u.email !== 'livreur@zihan.tn' &&
+          u.email !== 'client@zihan.tn'
+      );
+      if (clean.length !== parsed.length) {
+        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(clean));
+      }
+      return clean;
+    }
   } catch { /* ignore */ }
   return [];
 }

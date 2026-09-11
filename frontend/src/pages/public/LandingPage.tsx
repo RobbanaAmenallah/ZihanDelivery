@@ -265,8 +265,8 @@ export const LandingPage: React.FC = () => {
               </p>
               <p className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-[#1B3D87]" />
-                <a href="mailto:samiAyed1965@gmail.com" className="hover:underline">
-                  samiAyed1965@gmail.com
+                <a href="mailto:samiayed1965@gmail.com" className="hover:underline">
+                  samiayed1965@gmail.com
                 </a>
               </p>
             </div>

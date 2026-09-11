@@ -65,9 +65,9 @@ export const ParcelsManagementPage: React.FC = () => {
 
   // Form state for new parcel creation
   const [createForm, setCreateForm] = useState<CreateParcelPayload>({
-    sender_name: 'Boutique Express Mode',
-    sender_phone: '+216 71 888 999',
-    sender_address: '12 Rue des Entrepreneurs, Charguia 2, Tunis',
+    sender_name: '',
+    sender_phone: '',
+    sender_address: '',
     recipient_name: '',
     recipient_phone: '',
     recipient_secondary_phone: '',
@@ -234,9 +234,9 @@ export const ParcelsManagementPage: React.FC = () => {
 
     // Reset Form
     setCreateForm({
-      sender_name: 'Boutique Express Mode',
-      sender_phone: '+216 71 888 999',
-      sender_address: '12 Rue des Entrepreneurs, Charguia 2, Tunis',
+      sender_name: '',
+      sender_phone: '',
+      sender_address: '',
       recipient_name: '',
       recipient_phone: '',
       recipient_secondary_phone: '',

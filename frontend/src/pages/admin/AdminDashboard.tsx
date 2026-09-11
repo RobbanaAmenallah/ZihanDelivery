@@ -14,12 +14,14 @@ import {
   RefreshCw,
   ArrowRight,
   Shield,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
+import { ClientReturnRateAnalysis } from '@/components/admin/ClientReturnRateAnalysis';
 import { ROUTES } from '@/routes/paths';
 import { getDbParcels, parcelToDeliveryNoteData } from '@/services/parcelsDb';
 import type { Parcel } from '@/types';
@@ -79,6 +81,7 @@ export const AdminDashboard: React.FC = () => {
       .reduce((sum, p) => sum + (p.delivery_fee || 0), 0);
 
     const successRate = total > 0 ? Math.round((delivered / total) * 100) : 0;
+    const returnRate = total > 0 ? Number(((issues / total) * 100).toFixed(1)) : 0;
 
     return {
       total,
@@ -89,6 +92,7 @@ export const AdminDashboard: React.FC = () => {
       totalCOD,
       totalRevenue,
       successRate,
+      returnRate,
     };
   }, [filteredParcels]);
 
@@ -199,8 +203,8 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ── 4 Main KPI Cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* ── 5 Main KPI Cards ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <StatCard
           title="Colis sur la Période"
           value={stats.total}
@@ -215,6 +219,13 @@ export const AdminDashboard: React.FC = () => {
           description={`${stats.delivered} livrés avec succès`}
         />
         <StatCard
+          title="Taux de Retour Colis"
+          value={`${stats.returnRate}%`}
+          icon={<RotateCcw className="h-5 w-5 text-[#EA4E52]" />}
+          iconBgColor="bg-red-50 dark:bg-red-950/50"
+          description={`${stats.issues} retours / échecs`}
+        />
+        <StatCard
           title="Total Encaissé (COD)"
           value={`${stats.totalCOD.toFixed(3)} DT`}
           icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
@@ -224,8 +235,8 @@ export const AdminDashboard: React.FC = () => {
         <StatCard
           title="Chiffre d'Affaires ZIHAN"
           value={`${stats.totalRevenue.toFixed(3)} DT`}
-          icon={<TrendingUp className="h-5 w-5 text-[#EA4E52]" />}
-          iconBgColor="bg-red-50 dark:bg-red-950/50"
+          icon={<TrendingUp className="h-5 w-5 text-[#1B3D87]" />}
+          iconBgColor="bg-blue-50 dark:bg-blue-950/50"
           description="Frais de port générés"
         />
       </div>
@@ -442,6 +453,9 @@ export const AdminDashboard: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* ── Client Return Rate Analysis Section (Super Admin) ────────────────── */}
+      <ClientReturnRateAnalysis parcels={filteredParcels} />
 
       {/* Document Viewer Modal with PDF download */}
       {selectedParcelForDoc && (

@@ -4,7 +4,7 @@ export const APP_VERSION = '1.0.0';
 
 export const ZIHAN_COMPANY = {
   name: 'ZIHAN SUPER DELIVERY EXPRESS SARL',
-  email: 'samiAyed1965@gmail.com',
+  email: 'samiayed1965@gmail.com',
   phone1: '27 394 418',
   phone2: '27 394 137',
   phonesFormatted: '+216 27 394 418 / +216 27 394 137',

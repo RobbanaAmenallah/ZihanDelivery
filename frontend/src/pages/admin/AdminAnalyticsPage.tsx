@@ -9,8 +9,10 @@ import {
   DollarSign,
   AlertTriangle,
   Clock,
+  RotateCcw,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { ClientReturnRateAnalysis } from '@/components/admin/ClientReturnRateAnalysis';
 import { getDbParcels } from '@/services/parcelsDb';
 import type { Parcel } from '@/types';
 
@@ -60,8 +62,9 @@ export const AdminAnalyticsPage: React.FC = () => {
       .filter((p) => p.status === 'delivered')
       .reduce((s, p) => s + (p.total_amount || 0), 0);
     const deliveryRate = total > 0 ? Math.round((delivered / total) * 100) : 0;
+    const returnRate = total > 0 ? Number(((issues / total) * 100).toFixed(1)) : 0;
 
-    return { total, delivered, pending, inTransit, issues, totalRevenue, totalCOD, deliveryRate };
+    return { total, delivered, pending, inTransit, issues, totalRevenue, totalCOD, deliveryRate, returnRate };
   }, [parcels]);
 
   // ── Colis par jour (7 derniers jours) ────────────────────────────────────
@@ -152,7 +155,7 @@ export const AdminAnalyticsPage: React.FC = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card className="border-l-4 border-l-[#1B3D87] shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
@@ -168,11 +171,23 @@ export const AdminAnalyticsPage: React.FC = () => {
         <Card className="border-l-4 border-l-emerald-500 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Taux de Livraison</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Taux Livraison</p>
               <p className="text-2xl font-black text-emerald-600">{stats.deliveryRate}%</p>
             </div>
             <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl text-emerald-600">
               <TrendingUp className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-[#EA4E52] shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Taux Retour</p>
+              <p className="text-2xl font-black text-[#EA4E52]">{stats.returnRate}%</p>
+            </div>
+            <div className="p-2.5 bg-red-50 dark:bg-red-950/60 rounded-xl text-[#EA4E52]">
+              <RotateCcw className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
@@ -189,13 +204,13 @@ export const AdminAnalyticsPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-[#EA4E52] shadow-sm">
+        <Card className="border-l-4 border-l-purple-500 shadow-sm col-span-2 sm:col-span-1">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Revenus Livraison</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Revenus Ports</p>
               <p className="text-xl font-black text-foreground">{stats.totalRevenue.toFixed(1)} <span className="text-xs font-bold text-muted-foreground">DT</span></p>
             </div>
-            <div className="p-2.5 bg-red-50 dark:bg-red-950/60 rounded-xl text-[#EA4E52]">
+            <div className="p-2.5 bg-purple-50 dark:bg-purple-950/60 rounded-xl text-purple-600">
               <DollarSign className="h-5 w-5" />
             </div>
           </CardContent>
@@ -332,6 +347,9 @@ export const AdminAnalyticsPage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Client Return Rate Analysis Section */}
+      <ClientReturnRateAnalysis parcels={parcels} />
 
       {/* Alerts Section */}
       {(stats.pending > 0 || stats.issues > 0) && (

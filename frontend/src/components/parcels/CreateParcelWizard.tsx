@@ -61,9 +61,9 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
   // Form State
   const [formData, setFormData] = useState({
     // Step 1 - Sender
-    senderName: 'Boutique Express Mode',
-    senderPhone: '+216 71 888 999',
-    senderAddress: '12 Rue des Entrepreneurs, Charguia 2, Tunis',
+    senderName: '',
+    senderPhone: '',
+    senderAddress: '',
     // Step 2 - Recipient
     recipientName: '',
     recipientPhone: '',

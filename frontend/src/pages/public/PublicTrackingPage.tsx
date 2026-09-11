@@ -201,7 +201,7 @@ export const PublicTrackingPage: React.FC = () => {
                 <a href="https://wa.me/21627394418" target="_blank" rel="noopener noreferrer" className="text-emerald-600 font-bold hover:underline">
                   +216 27 394 418
                 </a>
-                &nbsp;•&nbsp; ✉️ samiAyed1965@gmail.com
+                &nbsp;•&nbsp; ✉️ samiayed1965@gmail.com
               </p>
             </div>
           </CardContent>

@@ -17,12 +17,12 @@ import { ROUTES } from '@/routes/paths';
 import { type UserRole } from '@/types';
 
 export const LoginPage: React.FC = () => {
-  const { user, role, signIn, loginAsDemo } = useAuth();
+  const { user, role, signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [email, setEmail] = useState<string>('admin@zihan.tn');
-  const [password, setPassword] = useState<string>('Password123!');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -33,10 +33,15 @@ export const LoginPage: React.FC = () => {
   const getRoleRedirect = (r: UserRole): string => {
     if (r === 'driver') return ROUTES.DRIVER;
     if (r === 'client') return ROUTES.CLIENT;
-    return ROUTES.ADMIN; // admin default
+    return ROUTES.ADMIN;
   };
 
-  // Auto redirect if user is already authenticated
+  // Purge any leftover demo/fake localStorage session on page load
+  useEffect(() => {
+    localStorage.removeItem('zihan_demo_user');
+  }, []);
+
+  // Auto redirect if user is already authenticated via Supabase
   useEffect(() => {
     if (user && role) {
       navigate(from ?? getRoleRedirect(role), { replace: true });
@@ -62,18 +67,14 @@ export const LoginPage: React.FC = () => {
         error.message.includes('invalid_credentials')
       ) {
         setErrorMsg('Email ou mot de passe incorrect. Vérifiez vos identifiants.');
-      } else if (error.message.includes('Database error querying schema')) {
-        setErrorMsg(
-          'Erreur de schéma Supabase : veuillez réexécuter le script supabase/seed.sql dans votre SQL Editor Supabase.',
-        );
       } else if (error.message.includes('Email not confirmed')) {
         setErrorMsg(
-          'Votre adresse email n\'est pas encore confirmée. Vérifiez votre boîte mail.',
+          "Votre adresse email n'est pas encore confirmée. Vérifiez votre boîte mail.",
         );
       } else if (error.message.includes('Too many requests')) {
         setErrorMsg('Trop de tentatives. Réessayez dans quelques minutes.');
       } else {
-        setErrorMsg(`Erreur : ${error.message}`);
+        setErrorMsg(`Erreur Supabase : ${error.message}`);
       }
       return;
     }
@@ -81,11 +82,6 @@ export const LoginPage: React.FC = () => {
     // Direct navigation using resolved role
     const destination = from ?? getRoleRedirect(resolvedRole);
     navigate(destination, { replace: true });
-  };
-
-  const handleQuickDemo = (demoRole: UserRole) => {
-    const assignedRole = loginAsDemo(demoRole);
-    navigate(getRoleRedirect(assignedRole), { replace: true });
   };
 
   return (
@@ -98,7 +94,10 @@ export const LoginPage: React.FC = () => {
 
         {/* Logo */}
         <div className="relative z-10">
-          <Link to={ROUTES.HOME}>
+          <Link
+            to={ROUTES.HOME}
+            className="inline-block p-3 bg-white rounded-2xl shadow-md border border-white/20 hover:shadow-lg transition-all"
+          >
             <ZihanOfficialLogo size="lg" variant="horizontal" showTagline={true} />
           </Link>
         </div>
@@ -130,18 +129,18 @@ export const LoginPage: React.FC = () => {
           </ul>
         </div>
 
-        {/* Footer */}
-        <div className="relative z-10 pt-6 border-t border-white/15 flex items-center justify-between text-xs text-white/60">
-          <span>Hub Central — 6 Av. Habib Bourguiba, Nouvelle Médina</span>
-          <span>+216 71 000 111</span>
-        </div>
+        {/* Empty spacing placeholder to keep justify-between layout balanced */}
+        <div className="relative z-10" />
       </div>
 
       {/* ── Right Form Panel ───────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col justify-center items-center p-6 sm:p-12 bg-card">
         {/* Mobile logo */}
-        <div className="md:hidden mb-8 text-center">
-          <Link to={ROUTES.HOME}>
+        <div className="md:hidden mb-8 text-center flex justify-center">
+          <Link
+            to={ROUTES.HOME}
+            className="inline-block p-2 bg-white rounded-xl shadow-xs border border-border"
+          >
             <ZihanOfficialLogo size="md" variant="horizontal" showTagline={true} />
           </Link>
         </div>
@@ -202,7 +201,7 @@ export const LoginPage: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Rôle par défaut : Administrateur</span>
+              <span>Portail Super Admin ZIHAN</span>
               <a
                 href="#forgot"
                 className="font-bold text-[#1B3D87] hover:underline dark:text-blue-400"
@@ -222,42 +221,6 @@ export const LoginPage: React.FC = () => {
               {isLoading ? 'Connexion en cours…' : 'Se connecter'}
             </Button>
           </form>
-
-          {/* Quick 1-Click Demo Logins */}
-          <div className="pt-3 border-t border-border/60 text-center space-y-2">
-            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-              ⚡ Accès direct 1-clic :
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs font-bold border-[#1B3D87]/30 hover:bg-[#1B3D87] hover:text-white transition-all shadow-xs"
-                onClick={() => handleQuickDemo('admin')}
-              >
-                🛡️ Admin
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs font-bold border-sky-500/30 hover:bg-sky-600 hover:text-white transition-all shadow-xs"
-                onClick={() => handleQuickDemo('driver')}
-              >
-                🚚 Livreur
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 text-xs font-bold border-emerald-500/30 hover:bg-emerald-600 hover:text-white transition-all shadow-xs"
-                onClick={() => handleQuickDemo('client')}
-              >
-                📦 Client
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

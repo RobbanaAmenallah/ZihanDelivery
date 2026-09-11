@@ -254,7 +254,7 @@ export const ZihanManifestTemplate: React.FC<ZihanManifestTemplateProps> = ({
           <div className="h-0.5 w-full bg-[#EA4E52]" />
           <div className="flex items-center justify-between text-[9px] text-[#667085] pt-1">
             <p className="font-black text-[#1B3D87]">
-              ZIHAN SUPER DELIVERY EXPRESS — Rue des anémones - Nouvelle Médina • 📞 27 394 418 / 27 394 137 • ✉️ samiAyed1965@gmail.com
+              ZIHAN SUPER DELIVERY EXPRESS — Rue des anémones - Nouvelle Médina • 📞 27 394 418 / 27 394 137 • ✉️ samiayed1965@gmail.com
             </p>
             <p>Page 1/1</p>
           </div>

@@ -156,9 +156,9 @@ export const ZihanInvoiceTemplate: React.FC<ZihanInvoiceTemplateProps> = ({
                 Émetteur
               </p>
               <p className="font-black text-[#162033]">ZIHAN SUPER DELIVERY EXPRESS SARL</p>
-              <p className="text-[#667085]">6 Avenue Habib Bourguiba - Nouvelle Médina</p>
+              <p className="text-[#667085]">Rue des anémones - Nouvelle Médina, Ben Arous</p>
               <p className="text-[#667085]">Matricule Fiscal : 1845239/M/A/000</p>
-              <p className="text-[#667085]">Email : compta@zihan.tn</p>
+              <p className="text-[#667085]">Email : samiayed1965@gmail.com</p>
             </div>
 
             {/* Facturé à */}
@@ -261,7 +261,7 @@ export const ZihanInvoiceTemplate: React.FC<ZihanInvoiceTemplateProps> = ({
               ZIHAN SUPER DELIVERY EXPRESS SARL — R.C. B0145292024 • MF : 1845239/M/A/000
               <br/>Rue des anémones - Nouvelle Médina, Ben Arous
             </p>
-            <p>📞 27 394 418 / 27 394 137 • 💬 WhatsApp : 27 394 418 • ✉️ samiAyed1965@gmail.com</p>
+            <p>📞 27 394 418 / 27 394 137 • 💬 WhatsApp : 27 394 418 • ✉️ samiayed1965@gmail.com</p>
             <p className="font-bold text-[#1B3D87]">www.zihan.tn</p>
           </div>
         </div>

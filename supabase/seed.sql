@@ -84,34 +84,36 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ==============================================================================
--- 5. CRÉATION DES 3 COMPTES (avec auth.users + auth.identities obligatoires)
--- Mot de passe pour tous : Password123!
+-- 5. CRÉATION DU COMPTE UNIQUE SUPER ADMIN (Sami Ayed)
+-- Email : samiayed1965@gmail.com
+-- Mot de passe : Sami1234
 -- ==============================================================================
 
 DO $$
 DECLARE
   admin_id UUID := 'a0000000-0000-0000-0000-000000000001';
-  driver_id UUID := 'a0000000-0000-0000-0000-000000000002';
-  client_id UUID := 'a0000000-0000-0000-0000-000000000003';
-  hashed_pwd TEXT := crypt('Password123!', gen_salt('bf'));
+  hashed_pwd TEXT := crypt('Sami1234', gen_salt('bf'));
 BEGIN
 
-  -- ── 1. COMPTE ADMIN (admin@zihan.tn) ──────────────────────────────────────
-  -- Nettoyage si existant incomplet
-  DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM auth.users WHERE email = 'admin@zihan.tn');
-  DELETE FROM auth.users WHERE email = 'admin@zihan.tn';
+  -- ── 1. SUPPRESSION DE TOUS LES ANCIENS UTILISATEURS DE TEST ─────────────────
+  DELETE FROM auth.identities;
+  DELETE FROM public.profiles WHERE id != admin_id;
+  DELETE FROM auth.users WHERE id != admin_id AND email != 'samiayed1965@gmail.com';
+  DELETE FROM auth.identities WHERE user_id = admin_id;
+  DELETE FROM auth.users WHERE id = admin_id OR email = 'samiayed1965@gmail.com';
 
+  -- ── 2. COMPTE SUPER ADMIN (samiayed1965@gmail.com) ──────────────────────────
   INSERT INTO auth.users (
     id, instance_id, email, encrypted_password, email_confirmed_at,
     raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, aud
   ) VALUES (
     admin_id,
     '00000000-0000-0000-0000-000000000000',
-    'admin@zihan.tn',
+    'samiayed1965@gmail.com',
     hashed_pwd,
     now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
-    '{"full_name":"Sami Robbana (Super Admin)","role":"admin"}'::jsonb,
+    '{"full_name":"Sami Ayed","role":"admin"}'::jsonb,
     now(),
     now(),
     'authenticated',
@@ -123,9 +125,9 @@ BEGIN
   ) VALUES (
     admin_id,
     admin_id,
-    format('{"sub":"%s","email":"%s"}', admin_id::text, 'admin@zihan.tn')::jsonb,
+    format('{"sub":"%s","email":"%s"}', admin_id::text, 'samiayed1965@gmail.com')::jsonb,
     'email',
-    'admin@zihan.tn',
+    'samiayed1965@gmail.com',
     now(),
     now(),
     now()
@@ -134,108 +136,13 @@ BEGIN
   INSERT INTO public.profiles (id, full_name, phone, role, company_name, is_active)
   VALUES (
     admin_id,
-    'Sami Robbana (Super Admin)',
-    '+216 71 000 111',
+    'Sami Ayed',
+    '+216 27 394 418',
     'admin',
     'ZIHAN Super Delivery Express HQ',
     true
   )
   ON CONFLICT (id) DO UPDATE
-  SET role = 'admin', full_name = 'Sami Robbana (Super Admin)';
-
-
-  -- ── 2. COMPTE LIVREUR (livreur@zihan.tn) ──────────────────────────────────
-  DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM auth.users WHERE email = 'livreur@zihan.tn');
-  DELETE FROM auth.users WHERE email = 'livreur@zihan.tn';
-
-  INSERT INTO auth.users (
-    id, instance_id, email, encrypted_password, email_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, aud
-  ) VALUES (
-    driver_id,
-    '00000000-0000-0000-0000-000000000000',
-    'livreur@zihan.tn',
-    hashed_pwd,
-    now(),
-    '{"provider":"email","providers":["email"]}'::jsonb,
-    '{"full_name":"Karim Mansouri","role":"driver"}'::jsonb,
-    now(),
-    now(),
-    'authenticated',
-    'authenticated'
-  );
-
-  INSERT INTO auth.identities (
-    id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    driver_id,
-    driver_id,
-    format('{"sub":"%s","email":"%s"}', driver_id::text, 'livreur@zihan.tn')::jsonb,
-    'email',
-    'livreur@zihan.tn',
-    now(),
-    now(),
-    now()
-  );
-
-  INSERT INTO public.profiles (id, full_name, phone, role, zone, vehicle, is_active)
-  VALUES (
-    driver_id,
-    'Karim Mansouri',
-    '+216 98 777 666',
-    'driver',
-    'Grand Tunis — Ben Arous / Nouvelle Médina',
-    'Citroën Berlingo (194 TUN 8840)',
-    true
-  )
-  ON CONFLICT (id) DO UPDATE
-  SET role = 'driver', full_name = 'Karim Mansouri';
-
-
-  -- ── 3. COMPTE CLIENT (client@zihan.tn) ───────────────────────────────────
-  DELETE FROM auth.identities WHERE user_id IN (SELECT id FROM auth.users WHERE email = 'client@zihan.tn');
-  DELETE FROM auth.users WHERE email = 'client@zihan.tn';
-
-  INSERT INTO auth.users (
-    id, instance_id, email, encrypted_password, email_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data, created_at, updated_at, role, aud
-  ) VALUES (
-    client_id,
-    '00000000-0000-0000-0000-000000000000',
-    'client@zihan.tn',
-    hashed_pwd,
-    now(),
-    '{"provider":"email","providers":["email"]}'::jsonb,
-    '{"full_name":"Mohamed Ben Ali","role":"client"}'::jsonb,
-    now(),
-    now(),
-    'authenticated',
-    'authenticated'
-  );
-
-  INSERT INTO auth.identities (
-    id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    client_id,
-    client_id,
-    format('{"sub":"%s","email":"%s"}', client_id::text, 'client@zihan.tn')::jsonb,
-    'email',
-    'client@zihan.tn',
-    now(),
-    now(),
-    now()
-  );
-
-  INSERT INTO public.profiles (id, full_name, phone, role, company_name, is_active)
-  VALUES (
-    client_id,
-    'Mohamed Ben Ali',
-    '+216 22 000 000',
-    'client',
-    'Boutique Express Mode',
-    true
-  )
-  ON CONFLICT (id) DO UPDATE
-  SET role = 'client', full_name = 'Mohamed Ben Ali';
+  SET role = 'admin', full_name = 'Sami Ayed', phone = '+216 27 394 418';
 
 END $$;

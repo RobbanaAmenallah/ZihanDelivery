@@ -34,202 +34,7 @@ export const ALL_TUNISIAN_GOVERNORATES = [
   'Kébili',
 ];
 
-export const DEMO_PARCELS: Parcel[] = [
-  {
-    id: 'p-001',
-    tracking_number: 'ZH000153',
-    sender_name: 'Boutique Express Mode',
-    sender_phone: '+216 71 888 999',
-    sender_address: '12 Rue des Entrepreneurs, Charguia 2, Tunis',
-    recipient_name: 'Mohamed Ben Ali',
-    recipient_phone: '+216 22 000 000',
-    recipient_secondary_phone: '+216 98 111 222',
-    recipient_governorate: 'Ben Arous',
-    recipient_delegation: 'Nouvelle Médina',
-    recipient_address: 'Résidence Ennasr, Bloc B, Apt 14',
-    recipient_postal_code: '2063',
-    description: 'Chaussures Sport ZIHAN Runner Pro (Taille 42)',
-    quantity: 1,
-    weight: 1.2,
-    is_fragile: false,
-    goods_amount: 70.0,
-    delivery_fee: 7.0,
-    total_amount: 77.0,
-    driver_name: 'Karim Mansouri',
-    status: 'in_transit',
-    notes: 'Appeler avant livraison',
-    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: 'p-002',
-    tracking_number: 'ZH000154',
-    sender_name: 'Boutique Express Mode',
-    sender_phone: '+216 71 888 999',
-    sender_address: '12 Rue des Entrepreneurs, Charguia 2, Tunis',
-    recipient_name: 'Sonia Trabelsi',
-    recipient_phone: '+216 55 123 456',
-    recipient_governorate: 'Tunis',
-    recipient_delegation: 'Menzah 6',
-    recipient_address: '14 Rue des Jasmins',
-    recipient_postal_code: '1004',
-    description: 'Robe de soirée élégante noire (Taille M)',
-    quantity: 1,
-    weight: 0.8,
-    is_fragile: false,
-    goods_amount: 120.0,
-    delivery_fee: 7.0,
-    total_amount: 127.0,
-    driver_name: 'Karim Mansouri',
-    status: 'delivered',
-    notes: 'Livré et encaissé en espèces',
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-  {
-    id: 'p-003',
-    tracking_number: 'ZH000155',
-    sender_name: 'Tech Express TN',
-    sender_phone: '+216 70 555 444',
-    sender_address: 'Centre Urbain Nord, Tunis',
-    recipient_name: 'Khaled Ayari',
-    recipient_phone: '+216 98 444 333',
-    recipient_governorate: 'Sousse',
-    recipient_delegation: 'Sousse Ville',
-    recipient_address: 'Avenue Habib Bourguiba, Résidence du Port',
-    recipient_postal_code: '4000',
-    description: 'Écouteurs sans fil Bluetooth Pro + Coque',
-    quantity: 2,
-    weight: 0.4,
-    is_fragile: true,
-    goods_amount: 95.0,
-    delivery_fee: 10.0,
-    total_amount: 105.0,
-    driver_name: '',
-    status: 'accepted',
-    notes: 'Colis fragile - Hors Grand Tunis',
-    created_at: new Date(Date.now() - 3600000 * 48).toISOString(),
-  },
-  {
-    id: 'p-004',
-    tracking_number: 'ZH000156',
-    sender_name: 'Cosmétique Bio Tunisie',
-    sender_phone: '+216 72 333 222',
-    sender_address: 'Nabeul',
-    recipient_name: 'Amira Dridi',
-    recipient_phone: '+216 24 999 888',
-    recipient_governorate: 'Ariana',
-    recipient_delegation: 'Ennasr 2',
-    recipient_address: 'Avenue Hédi Nouira, Immeuble Panorama',
-    recipient_postal_code: '2037',
-    description: 'Pack Soins Visage Naturel Argan & Rose',
-    quantity: 1,
-    weight: 1.5,
-    is_fragile: true,
-    goods_amount: 65.0,
-    delivery_fee: 7.0,
-    total_amount: 72.0,
-    driver_name: 'Karim Mansouri',
-    status: 'pending',
-    notes: 'À récupérer chez le commerçant',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'p-005',
-    tracking_number: 'ZH000160',
-    sender_name: 'Boutique Express Mode',
-    sender_phone: '+216 71 888 999',
-    sender_address: '12 Rue des Entrepreneurs, Charguia 2, Tunis',
-    recipient_name: 'Yassine Trabelsi',
-    recipient_phone: '+216 29 456 789',
-    recipient_secondary_phone: '+216 50 112 233',
-    recipient_governorate: 'Ben Arous',
-    recipient_delegation: 'Nouvelle Médina',
-    recipient_address: 'Rue des Anémones, Résidence El Yasmine, Apt 4',
-    recipient_postal_code: '2063',
-    description: 'Costume Homme Slim Fit Bleu Marine + Chemise Blanche',
-    quantity: 1,
-    weight: 1.8,
-    is_fragile: false,
-    goods_amount: 185.0,
-    delivery_fee: 7.0,
-    total_amount: 192.0,
-    driver_name: 'Karim Mansouri',
-    status: 'in_transit',
-    notes: 'Client prévenu par SMS - Paiement en espèces',
-    created_at: new Date(Date.now() - 3600000 * 1).toISOString(),
-  },
-  {
-    id: 'p-006',
-    tracking_number: 'ZH000161',
-    sender_name: 'Parfumerie Alyssa',
-    sender_phone: '+216 71 334 556',
-    sender_address: 'Avenue Habib Bourguiba, Tunis',
-    recipient_name: 'Mariem Khemir',
-    recipient_phone: '+216 93 888 777',
-    recipient_governorate: 'Tunis',
-    recipient_delegation: 'Menzah 9',
-    recipient_address: 'Résidence Les Pins, Bloc C, 3ème étage',
-    recipient_postal_code: '1013',
-    description: 'Coffret Parfum Luxe Oriental Eau de Parfum 100ml',
-    quantity: 1,
-    weight: 0.6,
-    is_fragile: true,
-    goods_amount: 145.0,
-    delivery_fee: 7.0,
-    total_amount: 152.0,
-    driver_name: 'Karim Mansouri',
-    status: 'assigned',
-    notes: 'Attention très fragile - Livraison avant 16h souhaitée',
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'p-007',
-    tracking_number: 'ZH000162',
-    sender_name: 'Tech Express TN',
-    sender_phone: '+216 70 555 444',
-    sender_address: 'Centre Urbain Nord, Tunis',
-    recipient_name: 'Anis Bouazizi',
-    recipient_phone: '+216 52 345 678',
-    recipient_governorate: 'Ariana',
-    recipient_delegation: 'Ennasr 2',
-    recipient_address: 'Avenue Hédi Nouira, Immeuble Golden Towers',
-    recipient_postal_code: '2037',
-    description: 'Montre Connectée Smartwatch Ultra + 2 Bracelets Sport',
-    quantity: 1,
-    weight: 0.5,
-    is_fragile: true,
-    goods_amount: 220.0,
-    delivery_fee: 7.0,
-    total_amount: 227.0,
-    driver_name: 'Karim Mansouri',
-    status: 'contacted',
-    notes: 'Client contacté par téléphone - Rdv fixé à 14h30',
-    created_at: new Date(Date.now() - 3600000 * 3).toISOString(),
-  },
-  {
-    id: 'p-008',
-    tracking_number: 'ZH000163',
-    sender_name: 'Maison du Cuir',
-    sender_phone: '+216 71 998 877',
-    sender_address: 'Rue de Rome, Tunis',
-    recipient_name: 'Nadia Belhadj',
-    recipient_phone: '+216 26 777 999',
-    recipient_governorate: 'Ben Arous',
-    recipient_delegation: 'Megrine Riadh',
-    recipient_address: '18 Rue Ibn Khaldoun',
-    recipient_postal_code: '2033',
-    description: 'Sac à main en cuir véritable bordeaux artisanal',
-    quantity: 1,
-    weight: 1.1,
-    is_fragile: false,
-    goods_amount: 130.0,
-    delivery_fee: 7.0,
-    total_amount: 137.0,
-    driver_name: 'Karim Mansouri',
-    status: 'picked_up',
-    notes: 'Colis ramassé à l’entrepôt - En cours d’acheminement',
-    created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-  },
-];
+export const DEMO_PARCELS: Parcel[] = [];
 
 // ─── Local Cache Helpers ──────────────────────────────────────────────────────
 
@@ -238,18 +43,14 @@ function getLocalCache(): Parcel[] {
     const cached = localStorage.getItem(LOCAL_PARCELS_KEY);
     if (cached) {
       const parsed = JSON.parse(cached) as Parcel[];
-      const existingTracking = new Set(parsed.map((p) => p.tracking_number));
-      const missing = DEMO_PARCELS.filter((p) => !existingTracking.has(p.tracking_number));
-      if (missing.length > 0) {
-        const merged = [...parsed, ...missing];
-        localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(merged));
-        return merged;
+      const clean = parsed.filter((p) => !p.id?.startsWith('p-00') && !p.tracking_number?.startsWith('ZH00015') && !p.tracking_number?.startsWith('ZH00016'));
+      if (clean.length !== parsed.length) {
+        localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(clean));
       }
-      return parsed;
+      return clean;
     }
   } catch { /* ignore */ }
-  localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(DEMO_PARCELS));
-  return DEMO_PARCELS;
+  return [];
 }
 
 // ─── Pricing Calculation ──────────────────────────────────────────────────────
@@ -309,7 +110,7 @@ export async function getDbParcels(): Promise<{
         };
       }
 
-      if (data && data.length > 0) {
+      if (data) {
         const mapped: Parcel[] = data.map((row) => ({
           id: row.id,
           tracking_number: row.tracking_number,
@@ -533,12 +334,12 @@ export function parcelToDeliveryNoteData(parcel: Parcel): DeliveryNoteData {
     trackingNumber: parcel.tracking_number,
     createdAt: formattedDate,
     sender: {
-      name: parcel.sender_name || 'Boutique Express Mode',
-      phone: parcel.sender_phone || '+216 71 888 999',
-      address: parcel.sender_address || '12 Rue des Entrepreneurs, Charguia 2',
-      city: 'Tunis',
-      governorate: 'Tunis',
-      postalCode: '2035',
+      name: parcel.sender_name || 'Expéditeur',
+      phone: parcel.sender_phone || '',
+      address: parcel.sender_address || '',
+      city: '',
+      governorate: '',
+      postalCode: '',
     },
     recipient: {
       name: parcel.recipient_name,

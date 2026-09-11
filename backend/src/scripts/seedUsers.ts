@@ -13,29 +13,12 @@ interface SeedAccount {
 
 const SEED_ACCOUNTS: SeedAccount[] = [
   {
-    email: 'admin@zihan.tn',
-    password: 'Password123!',
-    full_name: 'Sami Robbana (Super Admin)',
-    phone: '+216 71 000 111',
+    email: 'samiayed1965@gmail.com',
+    password: 'Sami1234',
+    full_name: 'Sami Ayed',
+    phone: '+216 27 394 418',
     role: 'admin',
     company_name: 'ZIHAN Super Delivery Express HQ',
-  },
-  {
-    email: 'livreur@zihan.tn',
-    password: 'Password123!',
-    full_name: 'Karim Mansouri',
-    phone: '+216 98 777 666',
-    role: 'driver',
-    zone: 'Grand Tunis — Ben Arous / Nouvelle Médina',
-    vehicle: 'Citroën Berlingo (194 TUN 8840)',
-  },
-  {
-    email: 'client@zihan.tn',
-    password: 'Password123!',
-    full_name: 'Mohamed Ben Ali (Boutique Mode)',
-    phone: '+216 22 000 000',
-    role: 'client',
-    company_name: 'Boutique Express Mode',
   },
 ];
 
