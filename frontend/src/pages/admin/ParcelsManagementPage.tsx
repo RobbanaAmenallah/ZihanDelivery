@@ -493,14 +493,14 @@ export const ParcelsManagementPage: React.FC = () => {
             className="h-9 px-2.5 rounded-lg border border-border bg-background text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-[#1B3D87]"
           >
             <option value="all">📍 Tous Gouvernorats</option>
-            <optgroup label="Grand Tunis (7 DT)">
+            <optgroup label="Grand Tunis">
               {GRAND_TUNIS_GOVERNORATES.map((g) => (
                 <option key={g} value={g}>
                   {g}
                 </option>
               ))}
             </optgroup>
-            <optgroup label="Hors Grand Tunis (10 DT)">
+            <optgroup label="Hors Grand Tunis">
               {ALL_TUNISIAN_GOVERNORATES.filter((g) => !GRAND_TUNIS_GOVERNORATES.includes(g)).map((g) => (
                 <option key={g} value={g}>
                   {g}
@@ -866,17 +866,17 @@ export const ParcelsManagementPage: React.FC = () => {
                   onChange={(e) => setCreateForm({ ...createForm, recipient_governorate: e.target.value })}
                   className="w-full h-9 px-3 rounded-lg border border-border bg-background text-xs font-semibold"
                 >
-                  <optgroup label="Grand Tunis (Tarif Réduit : 7 DT)">
+                  <optgroup label="Grand Tunis">
                     {GRAND_TUNIS_GOVERNORATES.map((g) => (
                       <option key={g} value={g}>
-                        {g} (7 DT)
+                        {g}
                       </option>
                     ))}
                   </optgroup>
-                  <optgroup label="Hors Grand Tunis (Tarif Standard : 10 DT)">
+                  <optgroup label="Hors Grand Tunis">
                     {ALL_TUNISIAN_GOVERNORATES.filter((g) => !GRAND_TUNIS_GOVERNORATES.includes(g)).map((g) => (
                       <option key={g} value={g}>
-                        {g} (10 DT)
+                        {g}
                       </option>
                     ))}
                   </optgroup>
