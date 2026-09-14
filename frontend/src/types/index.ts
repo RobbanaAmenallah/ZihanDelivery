@@ -122,6 +122,7 @@ export interface Parcel {
 }
 
 export interface CreateParcelPayload {
+  sender_id?: string | null;
   sender_name: string;
   sender_phone: string;
   sender_address: string;
@@ -137,9 +138,12 @@ export interface CreateParcelPayload {
   weight: number;
   is_fragile: boolean;
   goods_amount: number;
+  delivery_fee?: number;
+  total_amount?: number;
   notes?: string;
   driver_name?: string;
 }
+
 
 export interface UpdateParcelPayload {
   recipient_name?: string;

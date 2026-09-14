@@ -208,17 +208,24 @@ export const ParcelsManagementPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const { parcel: created, error } = await createDbParcel(createForm);
+    const { parcel: created, error } = await createDbParcel({
+      ...createForm,
+      delivery_fee: formDeliveryFee,
+      total_amount: formTotalAmount,
+    });
     setIsSubmitting(false);
 
+    // The parcel is always saved locally even if Supabase fails
+    // Show warning if Supabase had an issue, but don't block the flow
     if (error) {
-      setFormError(error);
-      return;
+      showToast(`⚠️ Colis enregistré localement (${error}). Vérifiez la connexion Supabase.`);
     }
 
     setParcels((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
     setIsCreateModalOpen(false);
-    showToast(`✅ Colis ${created.tracking_number} enregistré avec succès !`);
+    if (!error) {
+      showToast(`✅ Colis ${created.tracking_number} enregistré dans Supabase avec succès !`);
+    }
 
     // Reset Form
     setCreateForm({

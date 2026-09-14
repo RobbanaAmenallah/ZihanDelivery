@@ -1,4 +1,4 @@
-﻿import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import { type UserProfile, type CreateUserPayload, type UpdateUserPayload } from '@/types';
 
@@ -119,7 +119,11 @@ export async function getDbUsers(): Promise<{
 
 /**
  * Create a new user in Supabase (auth + public.profiles).
- * Uses isolated client so it does not overwrite admin's session or hit confirmation email limits.
+ *
+ * Priority:
+ *  1. Backend API (Service Role Key — bypasses rate limits completely) ✅ Preferred
+ *  2. Direct Supabase signUp via isolated client (may hit 429 rate limit)
+ *  3. Local-only cache fallback if everything fails
  */
 export async function createDbUser(
   payload: CreateUserPayload,
@@ -128,7 +132,7 @@ export async function createDbUser(
   const { url, key, isConfigured } = getActiveSupabaseConfig();
   const mainClient = getSupabaseClient();
 
-  // 1. If an admin JWT token is provided, try Backend API (Service Role Key)
+  // ── 1. BACKEND API (Service Role Key — no rate limits) ────────────────────
   if (token) {
     try {
       const backendRes = await fetch(`${API_BASE}/admin/users`, {
@@ -143,48 +147,95 @@ export async function createDbUser(
       if (backendRes.ok) {
         const json = await backendRes.json();
         if (json.data) {
+          const userFromBackend: UserProfile = {
+            id: json.data.id,
+            email: json.data.email || payload.email,
+            full_name: json.data.full_name || payload.full_name,
+            phone: json.data.phone || payload.phone,
+            role: json.data.role || payload.role,
+            company_name: json.data.company_name || payload.company_name || '',
+            zone: json.data.zone || payload.zone || '',
+            vehicle: json.data.vehicle || payload.vehicle || '',
+            is_active: json.data.is_active ?? true,
+            created_at: json.data.created_at || new Date().toISOString(),
+            created_by: null,
+          };
           const current = getLocalCache();
           localStorage.setItem(
             LOCAL_USERS_KEY,
-            JSON.stringify([json.data, ...current.filter((u) => u.id !== json.data.id)])
+            JSON.stringify([userFromBackend, ...current.filter((u) => u.id !== userFromBackend.id)])
           );
-          return { user: json.data, error: null };
+          return { user: userFromBackend, error: null };
         }
       }
+
+      // Backend returned an error response — read it and report
+      try {
+        const errJson = await backendRes.json();
+        const errMsg = errJson.message || `Erreur backend (${backendRes.status})`;
+        // Don't fall through to signUp for business errors like "email already in use"
+        if (backendRes.status === 400) {
+          const localUser: UserProfile = {
+            id: crypto.randomUUID(),
+            email: payload.email,
+            full_name: payload.full_name,
+            phone: payload.phone,
+            role: payload.role,
+            company_name: payload.company_name || '',
+            zone: payload.zone || '',
+            vehicle: payload.vehicle || '',
+            is_active: true,
+            created_at: new Date().toISOString(),
+            created_by: null,
+          };
+          return { user: localUser, error: errMsg };
+        }
+      } catch { /* ignore json parse error */ }
     } catch {
-      // Backend offline or unreachable — fall through to direct Supabase
+      // Backend offline or network error — fall through to direct Supabase
+      console.warn('[usersDb] Backend unreachable, falling back to direct Supabase');
     }
   }
 
-  // 2. Direct Supabase creation via isolated auth client (isolated from admin session)
+  // ── 2. DIRECT SUPABASE — only if backend is unavailable ───────────────────
   if (isConfigured) {
     try {
-      const isolatedAuthClient = createClient(url, key, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      });
+      let authUserId: string | null = null;
+      let isRateLimited = false;
 
-      // Sign up user via isolated client
-      const { data: signUpData, error: signUpError } = await isolatedAuthClient.auth.signUp({
-        email: payload.email,
-        password: payload.password,
-        options: {
-          data: { full_name: payload.full_name, role: payload.role, phone: payload.phone },
-        },
-      });
+      // Try signUp via isolated client
+      try {
+        const isolatedAuthClient = createClient(url, key, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
 
-      let userId = signUpData?.user?.id;
+        const { data: signUpData, error: signUpError } = await isolatedAuthClient.auth.signUp({
+          email: payload.email,
+          password: payload.password,
+          options: {
+            data: { full_name: payload.full_name, role: payload.role, phone: payload.phone },
+          },
+        });
 
-      if (!userId || signUpError) {
-        // If rate limited or signup failed, generate UUID for direct profile insertion
-        userId = crypto.randomUUID();
+        if (signUpData?.user?.id) {
+          authUserId = signUpData.user.id;
+        } else if (
+          signUpError?.status === 429 ||
+          signUpError?.message?.includes('rate limit') ||
+          signUpError?.message?.includes('Too Many')
+        ) {
+          isRateLimited = true;
+        }
+      } catch (authErr) {
+        console.warn('[usersDb] Auth signUp notice:', authErr);
       }
 
-      // Upsert into public.profiles table in Supabase
+      // If auth was rate-limited or didn't return an ID, generate a unique profile UUID
+      const finalUserId = authUserId || crypto.randomUUID();
+
       const profileRow: Record<string, unknown> = {
-        id: userId,
+        id: finalUserId,
+        email: payload.email,
         full_name: payload.full_name,
         phone: payload.phone,
         role: payload.role,
@@ -195,22 +246,28 @@ export async function createDbUser(
         created_at: new Date().toISOString(),
       };
 
-      // Try with email column first, if it errors retry without email column
-      let { error: profileError } = await mainClient
-        .from('profiles')
-        .upsert({ ...profileRow, email: payload.email }, { onConflict: 'id' });
+      // Upsert into public.profiles table in Supabase
+      let profileError: any = null;
+      try {
+        const res = await mainClient
+          .from('profiles')
+          .upsert(profileRow, { onConflict: 'id' });
+        profileError = res.error;
 
-      if (profileError) {
-        const retryRes = await mainClient.from('profiles').upsert(profileRow, { onConflict: 'id' });
-        profileError = retryRes.error;
-      }
-
-      if (profileError) {
-        console.warn('[usersDb] Profile upsert notice:', profileError.message);
+        // If error might be due to email column not yet added, try without email
+        if (profileError && profileError.message?.includes('column "email"')) {
+          const { email, ...rowWithoutEmail } = profileRow;
+          const retryRes = await mainClient
+            .from('profiles')
+            .upsert(rowWithoutEmail, { onConflict: 'id' });
+          profileError = retryRes.error;
+        }
+      } catch (dbErr) {
+        profileError = dbErr;
       }
 
       const newUser: UserProfile = {
-        id: userId,
+        id: finalUserId,
         email: payload.email,
         full_name: payload.full_name,
         phone: payload.phone,
@@ -223,20 +280,34 @@ export async function createDbUser(
         created_by: null,
       };
 
-      // Cache locally
+      // Always save in local cache for immediate display
       const current = getLocalCache();
       localStorage.setItem(
         LOCAL_USERS_KEY,
         JSON.stringify([newUser, ...current.filter((u) => u.id !== newUser.id)])
       );
 
-      return { user: newUser, error: null };
+      if (profileError) {
+        console.warn('[usersDb] Profile DB save notice:', profileError.message || profileError);
+        return {
+          user: newUser,
+          error: `⚠️ Enregistré localement. Pour enregistrer dans Supabase sans limite horaire, exécutez le script SQL (enable_realtime_and_fix_sync.sql) dans votre dashboard Supabase.`,
+        };
+      }
+
+      // Success in Supabase DB!
+      return {
+        user: newUser,
+        error: isRateLimited
+          ? `⚠️ Utilisateur enregistré dans Supabase (Profil créé directement sans compte Auth dû à la limite horaire Supabase).`
+          : null,
+      };
     } catch (err) {
-      console.error('[usersDb] Direct create error:', err);
+      console.error('[usersDb] Direct create exception:', err);
     }
   }
 
-  // 3. Fallback: Local Cache
+  // ── 3. LOCAL-ONLY FALLBACK ────────────────────────────────────────────────
   const fallbackUser: UserProfile = {
     id: crypto.randomUUID(),
     email: payload.email,
@@ -252,13 +323,13 @@ export async function createDbUser(
   };
 
   const current = getLocalCache();
-  localStorage.setItem(
-    LOCAL_USERS_KEY,
-    JSON.stringify([fallbackUser, ...current.filter((u) => u.id !== fallbackUser.id)])
-  );
-
-  return { user: fallbackUser, error: null };
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify([fallbackUser, ...current.filter((u) => u.id !== fallbackUser.id)]));
+  return {
+    user: fallbackUser,
+    error: 'Supabase non disponible. Utilisateur sauvegardé localement uniquement.',
+  };
 }
+
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
 

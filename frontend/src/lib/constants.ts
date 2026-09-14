@@ -17,5 +17,8 @@ export const ZIHAN_COMPANY = {
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+export const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL || 'https://oszoyestzrxzfmopvocy.supabase.co';
+export const SUPABASE_ANON_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_Qhgqt84qhfWO6BLxPuROIQ_QCT-4jvP';
+

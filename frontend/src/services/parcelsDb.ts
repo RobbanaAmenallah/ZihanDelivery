@@ -111,8 +111,14 @@ export async function getDbParcels(): Promise<{
       if (data) {
         const mapped: Parcel[] = data.map((row) => {
           const gAmount = Number(row.goods_amount) || 0;
-          const dFee = row.delivery_fee !== undefined && row.delivery_fee !== null ? Number(row.delivery_fee) : calculateDeliveryFee(row.recipient_governorate || 'Tunis', row.sender_name);
-          const tAmount = Number(row.total_amount) || (gAmount + dFee);
+          const dFee =
+            row.delivery_fee !== undefined && row.delivery_fee !== null
+              ? Number(row.delivery_fee)
+              : calculateDeliveryFee(row.recipient_governorate || 'Tunis', row.sender_name);
+          const tAmount =
+            row.total_amount !== undefined && row.total_amount !== null
+              ? Number(row.total_amount)
+              : gAmount + dFee;
 
           return {
             id: row.id,
@@ -144,23 +150,9 @@ export async function getDbParcels(): Promise<{
           };
         });
 
-        // Merge Supabase parcels with local cache so created parcels never disappear on refresh
-        const parcelMap = new Map<string, Parcel>();
-        localCache.forEach((p) => {
-          const key = p.tracking_number || p.id;
-          if (key) parcelMap.set(key, p);
-        });
-        mapped.forEach((p) => {
-          const key = p.tracking_number || p.id;
-          if (key) parcelMap.set(key, p);
-        });
-
-        const mergedParcels = Array.from(parcelMap.values()).sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-
-        localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(mergedParcels));
-        return { parcels: mergedParcels, source: 'supabase', error: null };
+        // Store latest Supabase data into local cache for offline fallback
+        localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(mapped));
+        return { parcels: mapped, source: 'supabase', error: null };
       }
     } catch (err) {
       return {
@@ -189,14 +181,21 @@ export async function createDbParcel(
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
 
-  const delivery_fee = calculateDeliveryFee(payload.recipient_governorate, payload.sender_name);
+  const delivery_fee =
+    payload.delivery_fee !== undefined && payload.delivery_fee !== null
+      ? Number(payload.delivery_fee)
+      : calculateDeliveryFee(payload.recipient_governorate, payload.sender_name);
   const goods_amount = Number(payload.goods_amount || 0);
-  const total_amount = goods_amount + delivery_fee;
+  const total_amount =
+    payload.total_amount !== undefined && payload.total_amount !== null
+      ? Number(payload.total_amount)
+      : goods_amount + delivery_fee;
   const tracking_number = `ZH${Math.floor(100000 + Math.random() * 900000)}`;
 
   const newParcel: Parcel = {
     id: `parcel_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     tracking_number,
+    sender_id: payload.sender_id || null,
     sender_name: payload.sender_name,
     sender_phone: payload.sender_phone,
     sender_address: payload.sender_address,
@@ -219,6 +218,8 @@ export async function createDbParcel(
     notes: payload.notes || '',
     created_at: new Date().toISOString(),
   };
+
+  let dbErrorMsg: string | null = null;
 
   if (isConfigured) {
     try {
@@ -251,12 +252,14 @@ export async function createDbParcel(
         .single();
 
       if (error) {
-        console.warn('Supabase insert parcel error:', error);
+        console.error('Supabase insert parcel error:', error);
+        dbErrorMsg = `Erreur Supabase : ${error.message}`;
       } else if (data) {
         newParcel.id = data.id;
       }
     } catch (err) {
-      console.warn('Supabase exception inserting parcel:', err);
+      console.error('Supabase exception inserting parcel:', err);
+      dbErrorMsg = `Exception Supabase : ${(err as Error).message}`;
     }
   }
 
@@ -270,7 +273,7 @@ export async function createDbParcel(
   ];
   localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(updatedCache));
 
-  return { parcel: newParcel, error: null };
+  return { parcel: newParcel, error: dbErrorMsg };
 }
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────

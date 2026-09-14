@@ -275,14 +275,15 @@ export const UsersManagementPage: React.FC = () => {
     setIsSubmitting(false);
 
     if (dbError) {
-      setFormError(dbError);
-      return;
+      showToast(`⚠️ ${dbError}`);
     }
 
     // Add to state immediately
     setUsers((prev) => [createdUser, ...prev.filter((u) => u.id !== createdUser.id)]);
     setIsCreateModalOpen(false);
-    showToast(`✅ Utilisateur "${createdUser.full_name}" enregistré dans la base de données !`);
+    if (!dbError) {
+      showToast(`✅ Utilisateur "${createdUser.full_name}" enregistré dans la base de données !`);
+    }
 
     // Reset Form
     setCreateForm({
