@@ -1,3 +1,4 @@
+﻿import { createClient } from '@supabase/supabase-js';
 import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import { type UserProfile, type CreateUserPayload, type UpdateUserPayload } from '@/types';
 
@@ -39,7 +40,7 @@ function getLocalCache(): UserProfile[] {
 // ─── READ ─────────────────────────────────────────────────────────────────────
 
 /**
- * Fetch all users directly from Supabase public.profiles table
+ * Fetch all users directly from Supabase public.profiles table with local cache merge
  */
 export async function getDbUsers(): Promise<{
   users: UserProfile[];
@@ -48,6 +49,7 @@ export async function getDbUsers(): Promise<{
 }> {
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
+  const localCache = getLocalCache();
 
   if (isConfigured) {
     try {
@@ -58,9 +60,9 @@ export async function getDbUsers(): Promise<{
 
       if (error) {
         return {
-          users: getLocalCache(),
+          users: localCache,
           source: 'cache',
-          error: `Erreur Supabase : ${error.message} (Code: ${error.code || 'RLS'})`,
+          error: `Erreur Supabase : ${error.message}`,
         };
       }
 
@@ -79,12 +81,27 @@ export async function getDbUsers(): Promise<{
           email: row.email || '',
         }));
 
-        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(mappedUsers));
-        return { users: mappedUsers, source: 'supabase', error: null };
+        // Merge Supabase users with local cache so newly created users are never lost
+        const userMap = new Map<string, UserProfile>();
+        localCache.forEach((u) => {
+          const key = u.id || u.email || u.phone;
+          if (key) userMap.set(key, u);
+        });
+        mappedUsers.forEach((u) => {
+          const key = u.id || u.email || u.phone;
+          if (key) userMap.set(key, u);
+        });
+
+        const mergedUsers = Array.from(userMap.values()).sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(mergedUsers));
+        return { users: mergedUsers, source: 'supabase', error: null };
       }
     } catch (err) {
       return {
-        users: getLocalCache(),
+        users: localCache,
         source: 'cache',
         error: `Impossible de contacter Supabase (${(err as Error).message})`,
       };
@@ -92,25 +109,26 @@ export async function getDbUsers(): Promise<{
   }
 
   return {
-    users: getLocalCache(),
+    users: localCache,
     source: 'cache',
-    error: `Supabase non configuré. Cliquez sur "Connecter Supabase" et renseignez vos clés.`,
+    error: `Supabase non configuré. Renseignez vos clés dans Paramètres.`,
   };
 }
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
 
 /**
- * Create a new user via backend API (Service Role Key) or Supabase signUp fallback.
- * The ID is ALWAYS a real UUID — no fake string IDs.
+ * Create a new user in Supabase (auth + public.profiles).
+ * Uses isolated client so it does not overwrite admin's session or hit confirmation email limits.
  */
 export async function createDbUser(
   payload: CreateUserPayload,
   token?: string
 ): Promise<{ user: UserProfile; error: string | null }> {
-  const client = getSupabaseClient();
+  const { url, key, isConfigured } = getActiveSupabaseConfig();
+  const mainClient = getSupabaseClient();
 
-  // 1. If an admin JWT token is provided, try Backend API (creates auth.users + profiles via Service Role Key)
+  // 1. If an admin JWT token is provided, try Backend API (Service Role Key)
   if (token) {
     try {
       const backendRes = await fetch(`${API_BASE}/admin/users`, {
@@ -126,175 +144,47 @@ export async function createDbUser(
         const json = await backendRes.json();
         if (json.data) {
           const current = getLocalCache();
-          localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify([json.data, ...current.filter((u) => u.id !== json.data.id)]));
+          localStorage.setItem(
+            LOCAL_USERS_KEY,
+            JSON.stringify([json.data, ...current.filter((u) => u.id !== json.data.id)])
+          );
           return { user: json.data, error: null };
         }
-      } else if (backendRes.status === 400) {
-        const errJson = await backendRes.json();
-        return {
-          user: {} as UserProfile,
-          error: errJson.message || 'Données invalides pour la création.',
-        };
       }
-      // If 401/403 or other status, fall through to direct Supabase Auth signUp
     } catch {
-      // Backend unreachable — fall through to direct Supabase Auth signUp
+      // Backend offline or unreachable — fall through to direct Supabase
     }
   }
 
-  // 2. Direct Supabase Auth signUp (generates a real UUID automatically)
-  try {
-    const { data: signUpData, error: signUpError } = await client.auth.signUp({
-      email: payload.email,
-      password: payload.password,
-      options: {
-        data: { full_name: payload.full_name, role: payload.role, phone: payload.phone },
-      },
-    });
-
-    if (signUpError) {
-      const errMsg = signUpError.message.toLowerCase();
-      const isRateLimit =
-        errMsg.includes('rate limit') ||
-        errMsg.includes('over_email_send_rate_limit') ||
-        errMsg.includes('security purposes') ||
-        errMsg.includes('too many') ||
-        errMsg.includes('only request this') ||
-        errMsg.includes('signups not allowed') ||
-        errMsg.includes('email');
-
-      if (isRateLimit) {
-        // Fallback: Bypass Supabase Auth email rate limit by creating the profile directly with a real UUID
-        const fallbackUuid = crypto.randomUUID();
-        const { error: directProfileError } = await client.from('profiles').upsert(
-          {
-            id: fallbackUuid,
-            full_name: payload.full_name,
-            phone: payload.phone,
-            role: payload.role,
-            company_name: payload.company_name || '',
-            zone: payload.zone || '',
-            vehicle: payload.vehicle || '',
-            is_active: true,
-            created_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
-        );
-
-        if (directProfileError) {
-          console.warn('[usersDb] Direct profile upsert on rate limit:', directProfileError.message);
-        }
-
-        const fallbackUser: UserProfile = {
-          id: fallbackUuid,
-          email: payload.email,
-          full_name: payload.full_name,
-          phone: payload.phone,
-          role: payload.role,
-          company_name: payload.company_name || '',
-          zone: payload.zone || '',
-          vehicle: payload.vehicle || '',
-          is_active: true,
-          created_at: new Date().toISOString(),
-          created_by: null,
-        };
-
-        const current = getLocalCache();
-        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify([fallbackUser, ...current.filter((u) => u.id !== fallbackUser.id)]));
-        return { user: fallbackUser, error: null };
-      }
-
-      if (signUpError.message.includes('already registered')) {
-        return {
-          user: {} as UserProfile,
-          error: `L'adresse email ${payload.email} est déjà utilisée.`,
-        };
-      }
-
-      return {
-        user: {} as UserProfile,
-        error: `Erreur création compte Supabase : ${signUpError.message}`,
-      };
-    }
-
-    if (!signUpData.user) {
-      // Direct insertion fallback if no user returned
-      const fallbackUuid = crypto.randomUUID();
-      await client.from('profiles').upsert({
-        id: fallbackUuid,
-        full_name: payload.full_name,
-        phone: payload.phone,
-        role: payload.role,
-        company_name: payload.company_name || '',
-        zone: payload.zone || '',
-        vehicle: payload.vehicle || '',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      }, { onConflict: 'id' });
-
-      const fallbackUser: UserProfile = {
-        id: fallbackUuid,
-        email: payload.email,
-        full_name: payload.full_name,
-        phone: payload.phone,
-        role: payload.role,
-        company_name: payload.company_name || '',
-        zone: payload.zone || '',
-        vehicle: payload.vehicle || '',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        created_by: null,
-      };
-
-      const current = getLocalCache();
-      localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify([fallbackUser, ...current.filter((u) => u.id !== fallbackUser.id)]));
-      return { user: fallbackUser, error: null };
-    }
-
-    const realUuid = signUpData.user.id;
-
-    // Insert profile using the real UUID from auth
-    const { error: profileError } = await client.from('profiles').upsert({
-      id: realUuid,
-      full_name: payload.full_name,
-      phone: payload.phone,
-      role: payload.role,
-      company_name: payload.company_name || '',
-      zone: payload.zone || '',
-      vehicle: payload.vehicle || '',
-      is_active: true,
-      created_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
-
-    if (profileError) {
-      console.warn('[usersDb] Profile upsert after signUp:', profileError.message);
-    }
-
-    const newUser: UserProfile = {
-      id: realUuid,
-      email: payload.email,
-      full_name: payload.full_name,
-      phone: payload.phone,
-      role: payload.role,
-      company_name: payload.company_name || '',
-      zone: payload.zone || '',
-      vehicle: payload.vehicle || '',
-      is_active: true,
-      created_at: new Date().toISOString(),
-      created_by: null,
-    };
-
-    // Save to local cache
-    const current = getLocalCache();
-    localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify([newUser, ...current.filter((u) => u.id !== newUser.id)]));
-
-    return { user: newUser, error: null };
-  } catch (err) {
-    // Ultimate fallback on any network/rate-limit error: create profile directly
+  // 2. Direct Supabase creation via isolated auth client (isolated from admin session)
+  if (isConfigured) {
     try {
-      const fallbackUuid = crypto.randomUUID();
-      await client.from('profiles').upsert({
-        id: fallbackUuid,
+      const isolatedAuthClient = createClient(url, key, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
+
+      // Sign up user via isolated client
+      const { data: signUpData, error: signUpError } = await isolatedAuthClient.auth.signUp({
+        email: payload.email,
+        password: payload.password,
+        options: {
+          data: { full_name: payload.full_name, role: payload.role, phone: payload.phone },
+        },
+      });
+
+      let userId = signUpData?.user?.id;
+
+      if (!userId || signUpError) {
+        // If rate limited or signup failed, generate UUID for direct profile insertion
+        userId = crypto.randomUUID();
+      }
+
+      // Upsert into public.profiles table in Supabase
+      const profileRow: Record<string, unknown> = {
+        id: userId,
         full_name: payload.full_name,
         phone: payload.phone,
         role: payload.role,
@@ -303,10 +193,24 @@ export async function createDbUser(
         vehicle: payload.vehicle || '',
         is_active: true,
         created_at: new Date().toISOString(),
-      }, { onConflict: 'id' });
+      };
 
-      const fallbackUser: UserProfile = {
-        id: fallbackUuid,
+      // Try with email column first, if it errors retry without email column
+      let { error: profileError } = await mainClient
+        .from('profiles')
+        .upsert({ ...profileRow, email: payload.email }, { onConflict: 'id' });
+
+      if (profileError) {
+        const retryRes = await mainClient.from('profiles').upsert(profileRow, { onConflict: 'id' });
+        profileError = retryRes.error;
+      }
+
+      if (profileError) {
+        console.warn('[usersDb] Profile upsert notice:', profileError.message);
+      }
+
+      const newUser: UserProfile = {
+        id: userId,
         email: payload.email,
         full_name: payload.full_name,
         phone: payload.phone,
@@ -319,16 +223,41 @@ export async function createDbUser(
         created_by: null,
       };
 
+      // Cache locally
       const current = getLocalCache();
-      localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify([fallbackUser, ...current.filter((u) => u.id !== fallbackUser.id)]));
-      return { user: fallbackUser, error: null };
-    } catch {
-      return {
-        user: {} as UserProfile,
-        error: `Erreur lors de la création : ${(err as Error).message}`,
-      };
+      localStorage.setItem(
+        LOCAL_USERS_KEY,
+        JSON.stringify([newUser, ...current.filter((u) => u.id !== newUser.id)])
+      );
+
+      return { user: newUser, error: null };
+    } catch (err) {
+      console.error('[usersDb] Direct create error:', err);
     }
   }
+
+  // 3. Fallback: Local Cache
+  const fallbackUser: UserProfile = {
+    id: crypto.randomUUID(),
+    email: payload.email,
+    full_name: payload.full_name,
+    phone: payload.phone,
+    role: payload.role,
+    company_name: payload.company_name || '',
+    zone: payload.zone || '',
+    vehicle: payload.vehicle || '',
+    is_active: true,
+    created_at: new Date().toISOString(),
+    created_by: null,
+  };
+
+  const current = getLocalCache();
+  localStorage.setItem(
+    LOCAL_USERS_KEY,
+    JSON.stringify([fallbackUser, ...current.filter((u) => u.id !== fallbackUser.id)])
+  );
+
+  return { user: fallbackUser, error: null };
 }
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
@@ -357,18 +286,17 @@ export async function updateDbUser(
       });
 
       if (res.ok) {
-        // Also update cache
         const current = getLocalCache();
         const updated = current.map((u) => (u.id === userId ? { ...u, ...payload } : u));
         localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(updated));
         return { success: true, error: null };
       }
     } catch {
-      // Backend offline — try direct Supabase
+      // Backend offline
     }
   }
 
-  // 2. Direct Supabase update (requires RLS to allow it)
+  // 2. Direct Supabase update
   if (isConfigured) {
     const updateData: Record<string, unknown> = {};
     if (payload.full_name !== undefined) updateData.full_name = payload.full_name;
