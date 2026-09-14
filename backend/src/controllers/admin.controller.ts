@@ -78,7 +78,6 @@ export async function createUser(
       return;
     }
 
-    // 2. Insert into public.profiles (trigger may do this too, but we ensure it)
     const { error: profileError } = await supabase.from('profiles').upsert(
       {
         id: authData.user.id,
@@ -95,17 +94,10 @@ export async function createUser(
     );
 
     if (profileError) {
-      // Auth user was created — still return success but log the profile error
-      console.error('[adminController] Profile insert error:', profileError.message);
+      console.warn('[adminController] Profile upsert warning:', profileError.message);
     }
 
-    // 3. Send Supabase magic link / invitation email (optional, relies on SMTP config)
-    try {
-      await supabase.auth.admin.inviteUserByEmail(email);
-    } catch {
-      // Non-fatal: user can still log in with the password set above
-    }
-
+    // 3. User created and confirmed directly without triggering email rate limits
     apiOk(
       res,
       {

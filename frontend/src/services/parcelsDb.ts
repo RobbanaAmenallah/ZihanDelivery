@@ -43,11 +43,7 @@ function getLocalCache(): Parcel[] {
     const cached = localStorage.getItem(LOCAL_PARCELS_KEY);
     if (cached) {
       const parsed = JSON.parse(cached) as Parcel[];
-      const clean = parsed.filter((p) => !p.id?.startsWith('p-00') && !p.tracking_number?.startsWith('ZH00015') && !p.tracking_number?.startsWith('ZH00016'));
-      if (clean.length !== parsed.length) {
-        localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(clean));
-      }
-      return clean;
+      return parsed;
     }
   } catch { /* ignore */ }
   return [];
@@ -94,6 +90,7 @@ export async function getDbParcels(): Promise<{
 }> {
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
+  const localCache = getLocalCache();
 
   if (isConfigured) {
     try {
@@ -103,49 +100,71 @@ export async function getDbParcels(): Promise<{
         .order('created_at', { ascending: false });
 
       if (error) {
+        console.warn('Supabase fetch error:', error);
         return {
-          parcels: getLocalCache(),
+          parcels: localCache,
           source: 'cache',
           error: `Erreur Supabase : ${error.message}`,
         };
       }
 
       if (data) {
-        const mapped: Parcel[] = data.map((row) => ({
-          id: row.id,
-          tracking_number: row.tracking_number,
-          sender_id: row.sender_id,
-          sender_name: row.sender_name || '',
-          sender_phone: row.sender_phone || '',
-          sender_address: row.sender_address || '',
-          recipient_name: row.recipient_name || '',
-          recipient_phone: row.recipient_phone || '',
-          recipient_secondary_phone: row.recipient_secondary_phone || '',
-          recipient_governorate: row.recipient_governorate || 'Tunis',
-          recipient_delegation: row.recipient_delegation || '',
-          recipient_address: row.recipient_address || '',
-          recipient_postal_code: row.recipient_postal_code || '',
-          description: row.description || 'Marchandise',
-          quantity: Number(row.quantity) || 1,
-          weight: Number(row.weight) || 1.0,
-          is_fragile: Boolean(row.is_fragile),
-          goods_amount: Number(row.goods_amount) || 0,
-          delivery_fee: Number(row.delivery_fee) || 7.0,
-          total_amount: Number(row.total_amount) || (Number(row.goods_amount) + Number(row.delivery_fee)),
-          driver_id: row.driver_id,
-          driver_name: row.driver_name || '',
-          status: (row.status as ParcelStatus) || 'pending',
-          notes: row.notes || '',
-          created_at: row.created_at || new Date().toISOString(),
-          updated_at: row.updated_at,
-        }));
+        const mapped: Parcel[] = data.map((row) => {
+          const gAmount = Number(row.goods_amount) || 0;
+          const dFee = row.delivery_fee !== undefined && row.delivery_fee !== null ? Number(row.delivery_fee) : calculateDeliveryFee(row.recipient_governorate || 'Tunis', row.sender_name);
+          const tAmount = Number(row.total_amount) || (gAmount + dFee);
 
-        localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(mapped));
-        return { parcels: mapped, source: 'supabase', error: null };
+          return {
+            id: row.id,
+            tracking_number: row.tracking_number,
+            sender_id: row.sender_id,
+            sender_name: row.sender_name || '',
+            sender_phone: row.sender_phone || '',
+            sender_address: row.sender_address || '',
+            recipient_name: row.recipient_name || '',
+            recipient_phone: row.recipient_phone || '',
+            recipient_secondary_phone: row.recipient_secondary_phone || '',
+            recipient_governorate: row.recipient_governorate || 'Tunis',
+            recipient_delegation: row.recipient_delegation || '',
+            recipient_address: row.recipient_address || '',
+            recipient_postal_code: row.recipient_postal_code || '',
+            description: row.description || 'Marchandise',
+            quantity: Number(row.quantity) || 1,
+            weight: Number(row.weight) || 1.0,
+            is_fragile: Boolean(row.is_fragile),
+            goods_amount: gAmount,
+            delivery_fee: dFee,
+            total_amount: tAmount,
+            driver_id: row.driver_id,
+            driver_name: row.driver_name || '',
+            status: (row.status as ParcelStatus) || 'pending',
+            notes: row.notes || '',
+            created_at: row.created_at || new Date().toISOString(),
+            updated_at: row.updated_at,
+          };
+        });
+
+        // Merge Supabase parcels with local cache so created parcels never disappear on refresh
+        const parcelMap = new Map<string, Parcel>();
+        localCache.forEach((p) => {
+          const key = p.tracking_number || p.id;
+          if (key) parcelMap.set(key, p);
+        });
+        mapped.forEach((p) => {
+          const key = p.tracking_number || p.id;
+          if (key) parcelMap.set(key, p);
+        });
+
+        const mergedParcels = Array.from(parcelMap.values()).sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
+        localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(mergedParcels));
+        return { parcels: mergedParcels, source: 'supabase', error: null };
       }
     } catch (err) {
       return {
-        parcels: getLocalCache(),
+        parcels: localCache,
         source: 'cache',
         error: `Impossible de joindre Supabase (${(err as Error).message})`,
       };
@@ -153,7 +172,7 @@ export async function getDbParcels(): Promise<{
   }
 
   return {
-    parcels: getLocalCache(),
+    parcels: localCache,
     source: 'cache',
     error: null,
   };
@@ -231,17 +250,25 @@ export async function createDbParcel(
         .select()
         .single();
 
-      if (!error && data) {
+      if (error) {
+        console.warn('Supabase insert parcel error:', error);
+      } else if (data) {
         newParcel.id = data.id;
       }
-    } catch {
-      // Direct insert fallback
+    } catch (err) {
+      console.warn('Supabase exception inserting parcel:', err);
     }
   }
 
   // Update local cache
   const current = getLocalCache();
-  localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify([newParcel, ...current]));
+  const updatedCache = [
+    newParcel,
+    ...current.filter(
+      (p) => p.id !== newParcel.id && p.tracking_number !== newParcel.tracking_number
+    ),
+  ];
+  localStorage.setItem(LOCAL_PARCELS_KEY, JSON.stringify(updatedCache));
 
   return { parcel: newParcel, error: null };
 }

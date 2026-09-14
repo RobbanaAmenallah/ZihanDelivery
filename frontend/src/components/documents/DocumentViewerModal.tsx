@@ -3,17 +3,13 @@ import {
   FileText,
   Printer,
   Download,
-  Receipt,
-  Truck,
   Tag,
   CheckCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { ZihanDeliveryNoteTemplate, type DeliveryNoteData, sampleDeliveryNoteData } from './ZihanDeliveryNoteTemplate';
-import { ZihanInvoiceTemplate } from './ZihanInvoiceTemplate';
-import { ZihanManifestTemplate } from './ZihanManifestTemplate';
-import { ZihanShippingLabelTemplate } from './ZihanShippingLabelTemplate';
+import { ZihanShippingLabelTemplate, type LabelData } from './ZihanShippingLabelTemplate';
 import { downloadElementAsPdf } from '@/lib/pdfGenerator';
 
 export type DocumentType = 'delivery_note' | 'invoice' | 'manifest' | 'label';
@@ -23,6 +19,7 @@ interface DocumentViewerModalProps {
   onClose: () => void;
   initialType?: DocumentType;
   deliveryNoteData?: DeliveryNoteData;
+  labelData?: LabelData;
 }
 
 export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
@@ -30,11 +27,30 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   onClose,
   initialType = 'delivery_note',
   deliveryNoteData = sampleDeliveryNoteData,
+  labelData: customLabelData,
 }) => {
   const [docType, setDocType] = useState<DocumentType>(initialType);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  const activeLabelData: LabelData = customLabelData || {
+    trackingNumber: deliveryNoteData.trackingNumber || 'ZH000153',
+    senderName: deliveryNoteData.sender?.name || 'Expéditeur',
+    senderPhone: deliveryNoteData.sender?.phone || '',
+    recipientName: deliveryNoteData.recipient?.name || 'Destinataire',
+    recipientPhone: deliveryNoteData.recipient?.phone || '',
+    secondaryPhone: deliveryNoteData.recipient?.secondaryPhone,
+    address: deliveryNoteData.recipient?.address || '',
+    city: deliveryNoteData.recipient?.city || '',
+    governorate: deliveryNoteData.recipient?.governorate || '',
+    postalCode: deliveryNoteData.recipient?.postalCode,
+    amountToCollect: deliveryNoteData.totalToCollect ?? deliveryNoteData.parcelValue ?? 0,
+    deliveryFee: deliveryNoteData.deliveryFee ?? 0,
+    isFragile: false,
+    notes: deliveryNoteData.notes,
+    date: deliveryNoteData.createdAt || new Date().toLocaleDateString('fr-FR'),
+  };
 
   const handlePrint = () => {
     window.print();
@@ -48,13 +64,9 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     try {
       const trackingNumber = deliveryNoteData?.trackingNumber || 'ZH000153';
       const filename =
-        docType === 'delivery_note'
-          ? `Bon_de_Commande_${trackingNumber}.pdf`
-          : docType === 'invoice'
-          ? `Facture_ZIHAN_${trackingNumber}.pdf`
-          : docType === 'manifest'
-          ? `Bordereau_ZIHAN_${trackingNumber}.pdf`
-          : `Etiquette_ZIHAN_${trackingNumber}.pdf`;
+        docType === 'label'
+          ? `Etiquette_ZIHAN_${trackingNumber}.pdf`
+          : `Bon_de_Livraison_${trackingNumber}.pdf`;
 
       await downloadElementAsPdf(printRef.current, filename);
       setDownloadSuccess(true);
@@ -127,27 +139,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             leftIcon={<FileText className="h-4 w-4" />}
             className={docType === 'delivery_note' ? 'bg-[#1B3D87] text-white' : ''}
           >
-            Bon de Commande / Livraison (A4)
-          </Button>
-
-          <Button
-            size="sm"
-            variant={docType === 'invoice' ? 'default' : 'outline'}
-            onClick={() => setDocType('invoice')}
-            leftIcon={<Receipt className="h-4 w-4" />}
-            className={docType === 'invoice' ? 'bg-[#1B3D87] text-white' : ''}
-          >
-            Facture Officielle (A4)
-          </Button>
-
-          <Button
-            size="sm"
-            variant={docType === 'manifest' ? 'default' : 'outline'}
-            onClick={() => setDocType('manifest')}
-            leftIcon={<Truck className="h-4 w-4" />}
-            className={docType === 'manifest' ? 'bg-[#1B3D87] text-white' : ''}
-          >
-            Bordereau Tournée (A4)
+            Bon de Livraison (A4)
           </Button>
 
           <Button
@@ -162,12 +154,12 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         </div>
 
         {/* Scaled Preview Frame */}
-        <div className="max-h-[65vh] overflow-y-auto bg-slate-200/80 dark:bg-slate-950 p-4 rounded-xl flex justify-center border border-border">
-          <div ref={printRef} className="origin-top bg-white">
-            {docType === 'delivery_note' && <ZihanDeliveryNoteTemplate data={deliveryNoteData} />}
-            {docType === 'invoice' && <ZihanInvoiceTemplate />}
-            {docType === 'manifest' && <ZihanManifestTemplate />}
-            {docType === 'label' && <ZihanShippingLabelTemplate />}
+        <div className="max-h-[58vh] overflow-y-auto overflow-x-auto bg-slate-200/80 dark:bg-slate-950 p-2 sm:p-4 rounded-xl flex justify-center border border-border">
+          <div className="w-full max-w-[794px] overflow-x-auto flex justify-center">
+            <div ref={printRef} className="origin-top bg-white shadow-md">
+              {docType === 'delivery_note' && <ZihanDeliveryNoteTemplate data={deliveryNoteData} />}
+              {docType === 'label' && <ZihanShippingLabelTemplate data={activeLabelData} />}
+            </div>
           </div>
         </div>
       </div>

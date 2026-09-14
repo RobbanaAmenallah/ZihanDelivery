@@ -11,6 +11,7 @@ import { UsersManagementPage } from '@/pages/admin/UsersManagementPage';
 import { ParcelsManagementPage } from '@/pages/admin/ParcelsManagementPage';
 import { AdminAnalyticsPage } from '@/pages/admin/AdminAnalyticsPage';
 import { ClientPricingManagementPage } from '@/pages/admin/ClientPricingManagementPage';
+import { AdminInvoicesPage } from '@/pages/admin/AdminInvoicesPage';
 
 // Client Pages
 import { ClientDashboardPage } from '@/pages/client/ClientDashboardPage';
@@ -57,6 +58,7 @@ const router = createBrowserRouter([
     children: [
       { path: ROUTES.ADMIN, element: <AdminDashboard /> },
       { path: ROUTES.ADMIN_SHIPMENTS, element: <ParcelsManagementPage /> },
+      { path: ROUTES.ADMIN_INVOICES, element: <AdminInvoicesPage /> },
       { path: ROUTES.ADMIN_PRICING, element: <ClientPricingManagementPage /> },
       { path: ROUTES.ADMIN_USERS, element: <UsersManagementPage /> },
       { path: ROUTES.ADMIN_ANALYTICS, element: <AdminAnalyticsPage /> },

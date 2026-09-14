@@ -34,7 +34,7 @@ export const ClientCreateParcelPage: React.FC = () => {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Calcul automatique du tarif (Grand Tunis 7 DT / Hors Tunis 10 DT) et génération du Bon officiel imprimable.
+            Calcul automatique du tarif de livraison et génération du Bon officiel imprimable.
           </p>
         </div>
 

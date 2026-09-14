@@ -12,7 +12,6 @@ export const ZIHAN_COMPANY = {
   whatsApp: '27 394 418',
   whatsAppFull: '+216 27 394 418',
   address: 'Rue des anémones - Nouvelle Médina, Ben Arous, Tunisie',
-  vatNumber: '1845239/M/A/000',
   website: 'www.zihan.tn',
 } as const;
 

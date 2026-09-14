@@ -35,6 +35,7 @@ import {
   ALL_TUNISIAN_GOVERNORATES,
   GRAND_TUNIS_GOVERNORATES,
 } from '@/services/parcelsDb';
+import { getDbUsers } from '@/services/usersDb';
 import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
 
@@ -46,8 +47,11 @@ export const ParcelsManagementPage: React.FC = () => {
   const [governorateFilter, setGovernorateFilter] = useState<string>('all');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // Drivers
+  // Drivers & Clients
   const [drivers, setDrivers] = useState<UserProfile[]>([]);
+  const [clients, setClients] = useState<UserProfile[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [manualDeliveryFee, setManualDeliveryFee] = useState<number | null>(null);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState<boolean>(false);
 
   // Modals state
@@ -89,38 +93,21 @@ export const ParcelsManagementPage: React.FC = () => {
     setTimeout(() => setToastMsg(null), 3500);
   };
 
-  // ── Load Drivers from Supabase or Demo fallback ─────────────────────────────
+  // ── Load Drivers & Clients from Supabase / Database ───────────────────────────
   const loadDrivers = useCallback(async () => {
     setIsLoadingDrivers(true);
-    const client = getSupabaseClient();
-    const config = getActiveSupabaseConfig();
-
-    if (config.isConfigured) {
-      try {
-        const { data } = await client
-          .from('profiles')
-          .select('*')
-          .eq('role', 'driver')
-          .eq('is_active', true)
-          .order('full_name');
-
-        if (data && data.length > 0) {
-          setDrivers(data as UserProfile[]);
-          setIsLoadingDrivers(false);
-          return;
-        }
-      } catch {
-        // fall through to demo
-      }
+    try {
+      const { users } = await getDbUsers();
+      const realDrivers = users.filter((u) => u.role === 'driver' && u.is_active !== false);
+      const realClients = users.filter((u) => u.role === 'client' && u.is_active !== false);
+      setDrivers(realDrivers);
+      setClients(realClients);
+    } catch {
+      setDrivers([]);
+      setClients([]);
+    } finally {
+      setIsLoadingDrivers(false);
     }
-
-    // Demo fallback
-    setDrivers([
-      { id: 'demo-d1', full_name: 'Karim Mansouri', phone: '+216 55 100 200', role: 'driver', zone: 'Grand Tunis — Ben Arous', vehicle: 'Citroën Berlingo (194 TUN 8840)', company_name: '', is_active: true, created_at: '', created_by: null, email: 'livreur@zihan.tn' },
-      { id: 'demo-d2', full_name: 'Sami Ben Ali', phone: '+216 55 300 400', role: 'driver', zone: 'Grand Tunis — Ariana', vehicle: 'Renault Kangoo (312 TUN 1122)', company_name: '', is_active: true, created_at: '', created_by: null, email: 'livreur2@zihan.tn' },
-      { id: 'demo-d3', full_name: 'Ahmed Trabelsi', phone: '+216 55 500 600', role: 'driver', zone: 'Sousse / Monastir', vehicle: 'Peugeot Partner (504 SOU 5533)', company_name: '', is_active: true, created_at: '', created_by: null, email: 'livreur3@zihan.tn' },
-    ]);
-    setIsLoadingDrivers(false);
   }, []);
 
   // ── Open Assignment Modal ──────────────────────────────────────────────────
@@ -168,9 +155,10 @@ export const ParcelsManagementPage: React.FC = () => {
     setIsLoading(false);
   }, []);
 
-  // ── 2. Realtime Subscription ────────────────────────────────────────────────
+  // ── 2. Realtime Subscription & Initial Load ─────────────────────────────────
   useEffect(() => {
     loadParcels();
+    loadDrivers();
 
     const config = getActiveSupabaseConfig();
     if (config.isConfigured) {
@@ -202,12 +190,12 @@ export const ParcelsManagementPage: React.FC = () => {
         client.removeChannel(channel);
       };
     }
-  }, [loadParcels]);
+  }, [loadParcels, loadDrivers]);
 
   // ── 3. Calculated Pricing for Create Form ────────────────────────────────────
-  const formDeliveryFee = calculateDeliveryFee(createForm.recipient_governorate, createForm.sender_name);
+  const autoDeliveryFee = calculateDeliveryFee(createForm.recipient_governorate, createForm.sender_name);
+  const formDeliveryFee = manualDeliveryFee !== null ? manualDeliveryFee : autoDeliveryFee;
   const formTotalAmount = Number(createForm.goods_amount || 0) + formDeliveryFee;
-  const isGrandTunis = GRAND_TUNIS_GOVERNORATES.includes(createForm.recipient_governorate);
 
   // ── 4. Create Parcel Handler ────────────────────────────────────────────────
   const handleCreateParcel = async (e: React.FormEvent) => {
@@ -252,6 +240,8 @@ export const ParcelsManagementPage: React.FC = () => {
       notes: '',
       driver_name: '',
     });
+    setManualDeliveryFee(null);
+    setSelectedClientId('');
 
     // Propose immediate preview
     setSelectedParcelForDoc(parcelToDeliveryNoteData(created));
@@ -798,196 +788,16 @@ export const ParcelsManagementPage: React.FC = () => {
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        size="lg"
+        size="3xl"
         title={
           <div className="flex items-center gap-2">
             <Package className="h-5 w-5 text-[#1B3D87]" />
             <span>Nouveau Colis &amp; Bon de Commande ZIHAN</span>
           </div>
         }
-        description="Calcul instantané du tarif (Grand Tunis 7 DT / Hors Grand Tunis 10 DT) et génération du Bon officiel."
-      >
-        <form onSubmit={handleCreateParcel} className="space-y-4">
-          {formError && (
-            <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-lg text-xs font-semibold">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{formError}</span>
-            </div>
-          )}
-
-          {/* Section Expéditeur */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-lg border border-border/60">
-            <p className="text-xs font-black uppercase tracking-wider text-[#1B3D87] mb-2">
-              1. Expéditeur (Client ZIHAN)
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Input
-                label="Nom de la Boutique / Expéditeur *"
-                value={createForm.sender_name}
-                onChange={(e) => setCreateForm({ ...createForm, sender_name: e.target.value })}
-                required
-              />
-              <Input
-                label="Téléphone Expéditeur *"
-                value={createForm.sender_phone}
-                onChange={(e) => setCreateForm({ ...createForm, sender_phone: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
-          {/* Section Destinataire */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-lg border border-border/60">
-            <p className="text-xs font-black uppercase tracking-wider text-[#1B3D87] mb-2">
-              2. Destinataire
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-              <Input
-                label="Nom &amp; Prénom Destinataire *"
-                placeholder="Ex: Mohamed Ben Ali"
-                value={createForm.recipient_name}
-                onChange={(e) => setCreateForm({ ...createForm, recipient_name: e.target.value })}
-                required
-              />
-              <Input
-                label="Téléphone Principal *"
-                placeholder="+216 22 000 000"
-                value={createForm.recipient_phone}
-                onChange={(e) => setCreateForm({ ...createForm, recipient_phone: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-              <div>
-                <label className="text-xs font-bold text-foreground mb-1 block">Gouvernorat *</label>
-                <select
-                  value={createForm.recipient_governorate}
-                  onChange={(e) => setCreateForm({ ...createForm, recipient_governorate: e.target.value })}
-                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-xs font-semibold"
-                >
-                  <optgroup label="Grand Tunis">
-                    {GRAND_TUNIS_GOVERNORATES.map((g) => (
-                      <option key={g} value={g}>
-                        {g}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Hors Grand Tunis">
-                    {ALL_TUNISIAN_GOVERNORATES.filter((g) => !GRAND_TUNIS_GOVERNORATES.includes(g)).map((g) => (
-                      <option key={g} value={g}>
-                        {g}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-
-              <Input
-                label="Ville / Délégation"
-                placeholder="Ex: Nouvelle Médina"
-                value={createForm.recipient_delegation || ''}
-                onChange={(e) => setCreateForm({ ...createForm, recipient_delegation: e.target.value })}
-              />
-
-              <Input
-                label="Code Postal"
-                placeholder="Ex: 2063"
-                value={createForm.recipient_postal_code || ''}
-                onChange={(e) => setCreateForm({ ...createForm, recipient_postal_code: e.target.value })}
-              />
-            </div>
-
-            <Input
-              label="Adresse de Livraison Exacte *"
-              placeholder="Ex: Résidence Ennasr, Bloc B, Apt 14, Rue..."
-              value={createForm.recipient_address}
-              onChange={(e) => setCreateForm({ ...createForm, recipient_address: e.target.value })}
-              required
-            />
-          </div>
-
-          {/* Section Colis & Tarification */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-lg border border-border/60">
-            <p className="text-xs font-black uppercase tracking-wider text-[#1B3D87] mb-2">
-              3. Marchandise &amp; Tarification ZIHAN
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-              <div className="sm:col-span-2">
-                <Input
-                  label="Désignation des Articles *"
-                  placeholder="Ex: Chaussures Sport ZIHAN Runner Pro"
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                  required
-                />
-              </div>
-
-              <Input
-                label="Montant Marchandise (COD DT) *"
-                type="number"
-                step="0.5"
-                min="0"
-                value={createForm.goods_amount}
-                onChange={(e) => setCreateForm({ ...createForm, goods_amount: parseFloat(e.target.value) || 0 })}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-              <Input
-                label="Quantité"
-                type="number"
-                min="1"
-                value={createForm.quantity}
-                onChange={(e) => setCreateForm({ ...createForm, quantity: parseInt(e.target.value, 10) || 1 })}
-              />
-
-              <Input
-                label="Poids Estimé (kg)"
-                type="number"
-                step="0.1"
-                min="0.1"
-                value={createForm.weight}
-                onChange={(e) => setCreateForm({ ...createForm, weight: parseFloat(e.target.value) || 1.0 })}
-              />
-
-              <div>
-                <label className="text-xs font-bold text-foreground mb-1 block">Livreur (optionnel)</label>
-                <select
-                  value={createForm.driver_name || ''}
-                  onChange={(e) => setCreateForm({ ...createForm, driver_name: e.target.value })}
-                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-xs font-semibold"
-                >
-                  <option value="">-- Assigner plus tard --</option>
-                  <option value="Karim Mansouri">Karim Mansouri (Grand Tunis)</option>
-                  <option value="Sami Ben Ali">Sami Ben Ali (Grand Tunis)</option>
-                  <option value="Ahmed Trabelsi">Ahmed Trabelsi (Sahel / Sousse)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Price Preview Banner */}
-            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-900 rounded-lg flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-[#1B3D87] dark:text-blue-300">
-                  {isGrandTunis ? 'Zone Grand Tunis (Tarif Fixe 7.000 DT)' : 'Zone Hors Grand Tunis (Tarif Fixe 10.000 DT)'}
-                </span>
-                <p className="text-[11px] text-muted-foreground">
-                  Montant article : {Number(createForm.goods_amount || 0).toFixed(2)} DT + Livraison : {formDeliveryFee.toFixed(2)} DT
-                </p>
-              </div>
-
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground">Total à Encaisser</span>
-                <p className="text-lg font-black text-[#1B3D87] dark:text-blue-300">
-                  {formTotalAmount.toFixed(3)} DT
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+        description="Calcul instantané selon le tarif du client et génération du Bon de commande officiel."
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
             <Button
               type="button"
               variant="outline"
@@ -998,6 +808,7 @@ export const ParcelsManagementPage: React.FC = () => {
             </Button>
             <Button
               type="submit"
+              form="create-parcel-form"
               variant="default"
               size="sm"
               isLoading={isSubmitting}
@@ -1005,6 +816,272 @@ export const ParcelsManagementPage: React.FC = () => {
             >
               Créer &amp; Générer Bon de Commande (PDF)
             </Button>
+          </div>
+        }
+      >
+        <form id="create-parcel-form" onSubmit={handleCreateParcel} className="space-y-3 text-xs">
+          {formError && (
+            <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-800 p-2.5 rounded-lg text-xs font-semibold">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+          {/* Wide 3-Column Grid Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+            {/* Section 1: Expéditeur */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-border/60 space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#1B3D87] border-b border-border/40 pb-1">
+                1. Expéditeur (Vendeur)
+              </p>
+
+              <div>
+                <label className="text-[10px] font-bold text-foreground mb-0.5 block">
+                  Choisir Expéditeur (Vendeur)
+                </label>
+                <select
+                  value={selectedClientId}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    setSelectedClientId(selectedId);
+                    if (!selectedId) {
+                      // Cleared: allow manual fee entry
+                      return;
+                    }
+                    const found = clients.find((c) => c.id === selectedId);
+                    if (found) {
+                      setCreateForm((prev) => ({
+                        ...prev,
+                        sender_name: found.company_name || found.full_name,
+                        sender_phone: found.phone || prev.sender_phone,
+                        sender_address: found.zone || prev.sender_address,
+                      }));
+                      // Clear manual fee: let client pricing rule apply automatically
+                      setManualDeliveryFee(null);
+                    }
+                  }}
+                  className="w-full h-8 px-1.5 rounded-lg border border-border bg-background text-xs font-semibold mb-1"
+                >
+                  <option value="">-- Parcourir mes clients ({clients.length}) --</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.company_name ? `${client.company_name} (${client.full_name})` : client.full_name} {client.phone ? `- ${client.phone}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Input
+                label="Nom / Boutique *"
+                placeholder="Boutique Express"
+                value={createForm.sender_name}
+                onChange={(e) => setCreateForm({ ...createForm, sender_name: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+                required
+              />
+              <Input
+                label="Téléphone *"
+                placeholder="+216 71 000 000"
+                value={createForm.sender_phone}
+                onChange={(e) => setCreateForm({ ...createForm, sender_phone: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+                required
+              />
+              <Input
+                label="Adresse d'enlèvement"
+                placeholder="Charguia, Tunis..."
+                value={createForm.sender_address}
+                onChange={(e) => setCreateForm({ ...createForm, sender_address: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+              />
+            </div>
+
+            {/* Section 2: Destinataire & Adresse */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-border/60 space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#1B3D87] border-b border-border/40 pb-1">
+                2. Destinataire &amp; Adresse
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Input
+                  label="Nom &amp; Prénom *"
+                  placeholder="Mohamed Ben Ali"
+                  value={createForm.recipient_name}
+                  onChange={(e) => setCreateForm({ ...createForm, recipient_name: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                  required
+                />
+                <Input
+                  label="Téléphone *"
+                  placeholder="+216 22 000 000"
+                  value={createForm.recipient_phone}
+                  onChange={(e) => setCreateForm({ ...createForm, recipient_phone: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <div>
+                  <label className="text-[10px] font-bold text-foreground mb-0.5 block">Gouvernorat *</label>
+                  <select
+                    value={createForm.recipient_governorate}
+                    onChange={(e) => setCreateForm({ ...createForm, recipient_governorate: e.target.value })}
+                    className="w-full h-8 px-1.5 rounded-lg border border-border bg-background text-xs font-semibold"
+                  >
+                    <optgroup label="Grand Tunis">
+                      {GRAND_TUNIS_GOVERNORATES.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Hors Grand Tunis">
+                      {ALL_TUNISIAN_GOVERNORATES.filter((g) => !GRAND_TUNIS_GOVERNORATES.includes(g)).map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+
+                <Input
+                  label="Ville"
+                  placeholder="Médina"
+                  value={createForm.recipient_delegation || ''}
+                  onChange={(e) => setCreateForm({ ...createForm, recipient_delegation: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+
+                <Input
+                  label="Code Postal"
+                  placeholder="2063"
+                  value={createForm.recipient_postal_code || ''}
+                  onChange={(e) => setCreateForm({ ...createForm, recipient_postal_code: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+              </div>
+
+              <Input
+                label="Adresse Complète *"
+                placeholder="Résidence, Apt, Rue..."
+                value={createForm.recipient_address}
+                onChange={(e) => setCreateForm({ ...createForm, recipient_address: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+                required
+              />
+            </div>
+
+            {/* Section 3: Marchandise & Tarification */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-border/60 space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#1B3D87] border-b border-border/40 pb-1">
+                3. Marchandise &amp; Tarification
+              </p>
+              <Input
+                label="Désignation Articles *"
+                placeholder="Chaussures Sport ZIHAN"
+                value={createForm.description}
+                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+                required
+              />
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <Input
+                  label="COD (DT) *"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  value={createForm.goods_amount}
+                  onChange={(e) => setCreateForm({ ...createForm, goods_amount: parseFloat(e.target.value) || 0 })}
+                  className="h-8 text-xs font-bold font-mono px-2 py-0.5"
+                  required
+                />
+                <Input
+                  label="Qté"
+                  type="number"
+                  min="1"
+                  value={createForm.quantity}
+                  onChange={(e) => setCreateForm({ ...createForm, quantity: parseInt(e.target.value, 10) || 1 })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+                <Input
+                  label="Poids (kg)"
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  value={createForm.weight}
+                  onChange={(e) => setCreateForm({ ...createForm, weight: parseFloat(e.target.value) || 1.0 })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-foreground mb-0.5 block">Livreur (optionnel)</label>
+                <select
+                  value={createForm.driver_name || ''}
+                  onChange={(e) => setCreateForm({ ...createForm, driver_name: e.target.value })}
+                  className="w-full h-8 px-1.5 rounded-lg border border-border bg-background text-xs font-semibold"
+                >
+                  <option value="">-- Assigner plus tard --</option>
+                  {drivers.map((driver) => (
+                    <option key={driver.id} value={driver.full_name}>
+                      {driver.full_name} {driver.zone ? `(${driver.zone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Price Banner */}
+              <div className="p-2 px-2.5 bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-900 rounded-lg mt-1 space-y-1.5">
+                {/* Delivery fee row */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1">
+                    <span className="text-[10px] font-bold text-[#1B3D87] dark:text-blue-300">
+                      {selectedClientId ? 'Tarif client (automatique)' : 'Frais de livraison (DT)'}
+                    </span>
+                    {selectedClientId && (
+                      <p className="text-[9px] text-muted-foreground">
+                        Tarif appliqué depuis la fiche client
+                      </p>
+                    )}
+                  </div>
+                  {selectedClientId ? (
+                    <span className="text-sm font-black text-[#1B3D87] dark:text-blue-300 font-mono">
+                      {formDeliveryFee.toFixed(2)} DT
+                    </span>
+                  ) : (
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      placeholder={autoDeliveryFee.toFixed(2)}
+                      value={manualDeliveryFee !== null ? manualDeliveryFee : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setManualDeliveryFee(val === '' ? null : parseFloat(val) || 0);
+                      }}
+                      className="w-24 h-8 px-2 rounded-lg border border-blue-300 bg-white dark:bg-blue-950 text-[#1B3D87] dark:text-blue-200 text-sm font-black font-mono text-right focus:outline-none focus:ring-2 focus:ring-[#1B3D87]"
+                    />
+                  )}
+                </div>
+
+                {!selectedClientId && (
+                  <p className="text-[9px] text-muted-foreground">
+                    Défaut auto : {autoDeliveryFee.toFixed(2)} DT — saisissez un montant pour personnaliser
+                  </p>
+                )}
+
+                {/* Total */}
+                <div className="flex items-center justify-between border-t border-blue-200 dark:border-blue-800 pt-1.5">
+                  <p className="text-[9px] text-muted-foreground">
+                    Article: {Number(createForm.goods_amount || 0).toFixed(2)} DT + Port: {formDeliveryFee.toFixed(2)} DT
+                  </p>
+                  <div className="text-right">
+                    <span className="text-[8px] uppercase font-bold text-muted-foreground block">Total À Encaisser</span>
+                    <p className="text-sm font-black text-[#1B3D87] dark:text-blue-300 font-mono">
+                      {formTotalAmount.toFixed(3)} DT
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
       </Modal>

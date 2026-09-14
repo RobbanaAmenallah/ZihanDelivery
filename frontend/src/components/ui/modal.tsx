@@ -10,7 +10,7 @@ export interface ModalProps {
   description?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full';
   showCloseButton?: boolean;
 }
 
@@ -47,13 +47,16 @@ export const Modal: React.FC<ModalProps> = ({
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
+    '2xl': 'max-w-5xl',
+    '3xl': 'max-w-6xl',
+    full: 'max-w-[96vw]',
   }[size];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
+        className="absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
         onClick={onClose}
       />
 
@@ -62,28 +65,28 @@ export const Modal: React.FC<ModalProps> = ({
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative z-50 w-full overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-150',
+          'relative z-10 w-full max-h-[85vh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-150',
           sizeClasses
         )}
       >
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between border-b border-border/60 p-6 pb-4">
-            <div className="space-y-1">
+          <div className="shrink-0 flex items-center justify-between border-b border-border/60 p-3 sm:p-4">
+            <div className="space-y-0.5 pr-4">
               {title && (
-                <h3 className="text-lg font-bold text-[#162033] dark:text-slate-100">
+                <h3 className="text-sm sm:text-base font-bold text-[#162033] dark:text-slate-100">
                   {title}
                 </h3>
               )}
               {description && (
-                <p className="text-xs text-muted-foreground">{description}</p>
+                <p className="text-[11px] text-muted-foreground">{description}</p>
               )}
             </div>
             {showCloseButton && (
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground shrink-0"
                 onClick={onClose}
               >
                 <X className="h-4 w-4" />
@@ -94,11 +97,13 @@ export const Modal: React.FC<ModalProps> = ({
         )}
 
         {/* Body */}
-        <div className="p-6">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 min-h-0 touch-pan-y">
+          {children}
+        </div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 border-t border-border/60 bg-muted/30 p-4 px-6">
+          <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border/60 bg-muted/30 p-2.5 sm:p-3 px-3 sm:px-4">
             {footer}
           </div>
         )}

@@ -9,6 +9,7 @@ export const ROUTES = {
   ADMIN: '/admin',
   ADMIN_USERS: '/admin/users',
   ADMIN_SHIPMENTS: '/admin/shipments',
+  ADMIN_INVOICES: '/admin/invoices',
   ADMIN_PRICING: '/admin/pricing',
   ADMIN_DRIVERS: '/admin/drivers',
   ADMIN_CLIENTS: '/admin/clients',
