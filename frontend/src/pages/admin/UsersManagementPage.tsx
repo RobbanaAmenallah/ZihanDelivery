@@ -26,6 +26,7 @@ import {
   CheckCircle,
   Settings,
   Link as LinkIcon,
+  KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -40,6 +41,8 @@ import {
   createDbUser,
   updateDbUser,
   deleteDbUser,
+  resetDbUserPassword,
+  STANDARD_PASSWORD_LABEL,
   type DbStatus,
 } from '@/services/usersDb';
 import {
@@ -155,6 +158,7 @@ export const UsersManagementPage: React.FC = () => {
   });
 
   const [editForm, setEditForm] = useState<UpdateUserPayload>({
+    email: '',
     full_name: '',
     phone: '',
     company_name: '',
@@ -304,6 +308,7 @@ export const UsersManagementPage: React.FC = () => {
   const handleOpenEdit = (user: UserProfile) => {
     setSelectedUser(user);
     setEditForm({
+      email: user.email || '',
       full_name: user.full_name,
       phone: user.phone,
       company_name: user.company_name,
@@ -326,6 +331,11 @@ export const UsersManagementPage: React.FC = () => {
       return;
     }
 
+    if (editForm.email && !editForm.email.includes('@')) {
+      setFormError("L'adresse email est invalide.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const { error } = await updateDbUser(selectedUser.id, editForm, session?.access_token);
@@ -344,6 +354,7 @@ export const UsersManagementPage: React.FC = () => {
           ? {
               ...u,
               ...editForm,
+              email: editForm.email || u.email,
               full_name: editForm.full_name || u.full_name,
               phone: editForm.phone || u.phone,
             }
@@ -352,7 +363,7 @@ export const UsersManagementPage: React.FC = () => {
     );
 
     setIsEditModalOpen(false);
-    showToast(`✅ Profil "${editForm.full_name}" modifié avec succès dans la base de données !`);
+    showToast(`✅ Utilisateur "${editForm.full_name}" (Email & Profil) mis à jour avec succès partout !`);
     setDbStatus((prev) => ({ ...prev, lastSync: new Date() }));
   };
 
@@ -393,6 +404,16 @@ export const UsersManagementPage: React.FC = () => {
         : `⚠️ Compte de ${user.full_name} suspendu en base.`
     );
     setDbStatus((prev) => ({ ...prev, lastSync: new Date() }));
+  };
+
+  // ── RESET PASSWORD to standard ──────────────────────────────────────────────
+  const handleResetPassword = async (user: UserProfile) => {
+    const { success, error } = await resetDbUserPassword(user.id, session?.access_token);
+    if (success) {
+      showToast(`🔑 Mot de passe de "${user.full_name}" réinitialisé → ${STANDARD_PASSWORD_LABEL}`);
+    } else {
+      showToast(`❌ ${error}`);
+    }
   };
 
   // ── EXPORT CSV ──────────────────────────────────────────────────────────────
@@ -882,6 +903,17 @@ export const UsersManagementPage: React.FC = () => {
                               <Edit2 className="h-4 w-4" />
                             </Button>
 
+                            {/* Réinitialiser le mot de passe */}
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="h-8 w-8 text-muted-foreground hover:text-orange-600 hover:bg-orange-50"
+                              title={`Réinitialiser MDP → ${STANDARD_PASSWORD_LABEL}`}
+                              onClick={() => handleResetPassword(u)}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
+
                             {/* Activer / Suspendre */}
                             <Button
                               variant="ghost"
@@ -910,6 +942,7 @@ export const UsersManagementPage: React.FC = () => {
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
+
                           </div>
                         </td>
                       </tr>
@@ -1165,6 +1198,15 @@ export const UsersManagementPage: React.FC = () => {
               leftIcon={<Phone className="h-4 w-4" />}
             />
           </div>
+
+          <Input
+            label="Adresse Email de Connexion *"
+            type="email"
+            placeholder="Ex: mohamed.t@zihan.tn"
+            value={editForm.email ?? ''}
+            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+            leftIcon={<Mail className="h-4 w-4" />}
+          />
 
           {selectedUser?.role === 'driver' && (
             <>

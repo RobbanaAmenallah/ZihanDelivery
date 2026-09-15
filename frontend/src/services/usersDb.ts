@@ -334,7 +334,7 @@ export async function createDbUser(
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
 
 /**
- * Update user in Supabase public.profiles
+ * Update user in Supabase public.profiles & auth.users
  */
 export async function updateDbUser(
   userId: string,
@@ -344,7 +344,22 @@ export async function updateDbUser(
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
 
-  // 1. Try Backend API (bypasses RLS with Service Role Key)
+  // 1. If email is being changed, update in Auth & Profiles via Supabase RPC
+  if (isConfigured && payload.email) {
+    try {
+      const { error: rpcError } = await client.rpc('update_user_email_by_admin', {
+        target_user_id: userId,
+        new_email: payload.email.trim().toLowerCase(),
+      });
+      if (rpcError && !rpcError.message?.includes('function') && !rpcError.message?.includes('does not exist')) {
+        return { success: false, error: rpcError.message };
+      }
+    } catch {
+      // RPC might not exist yet, fallback to backend or direct update
+    }
+  }
+
+  // 2. Try Backend API (uses Service Role Key to update auth.users and public.profiles)
   if (token) {
     try {
       const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
@@ -361,15 +376,23 @@ export async function updateDbUser(
         const updated = current.map((u) => (u.id === userId ? { ...u, ...payload } : u));
         localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(updated));
         return { success: true, error: null };
+      } else {
+        try {
+          const errData = await res.json();
+          if (errData.message) {
+            return { success: false, error: errData.message };
+          }
+        } catch { /* ignore */ }
       }
     } catch {
       // Backend offline
     }
   }
 
-  // 2. Direct Supabase update
+  // 3. Direct Supabase update on public.profiles
   if (isConfigured) {
     const updateData: Record<string, unknown> = {};
+    if (payload.email !== undefined) updateData.email = payload.email.trim().toLowerCase();
     if (payload.full_name !== undefined) updateData.full_name = payload.full_name;
     if (payload.phone !== undefined) updateData.phone = payload.phone;
     if (payload.company_name !== undefined) updateData.company_name = payload.company_name;
@@ -472,4 +495,44 @@ export async function deleteDbUser(
 
   return { success: true, error: null };
 }
+// ─── RESET PASSWORD ───────────────────────────────────────────────────────────
 
+export const STANDARD_PASSWORD_LABEL = 'Password123!';
+
+/**
+ * Reset a user's password to the standard password via backend API.
+ * Uses Service Role Key — works regardless of user's current password.
+ */
+export async function resetDbUserPassword(
+  userId: string,
+  token?: string,
+): Promise<{ success: boolean; error: string | null }> {
+  // Backend API (Service Role Key — direct password update, no email needed)
+  if (token) {
+    try {
+      const res = await fetch(`${API_BASE}/admin/users/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (res.ok) {
+        return { success: true, error: null };
+      }
+
+      try {
+        const errData = await res.json();
+        return { success: false, error: errData.message || `Erreur (${res.status})` };
+      } catch {
+        return { success: false, error: `Erreur serveur (${res.status})` };
+      }
+    } catch {
+      return { success: false, error: 'Backend inaccessible — mot de passe non réinitialisé.' };
+    }
+  }
+
+  return { success: false, error: 'Token admin requis pour réinitialiser le mot de passe.' };
+}

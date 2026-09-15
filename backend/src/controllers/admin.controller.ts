@@ -16,6 +16,7 @@ const createUserSchema = z.object({
 });
 
 const updateUserSchema = z.object({
+  email: z.string().email('Email invalide').optional(),
   full_name: z.string().min(2).optional(),
   phone: z.string().min(8).optional(),
   company_name: z.string().optional(),
@@ -25,8 +26,10 @@ const updateUserSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  email: z.string().email('Email invalide'),
+  userId: z.string().uuid('ID utilisateur invalide'),
 });
+
+const STANDARD_PASSWORD = 'Password123!';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +84,7 @@ export async function createUser(
     const { error: profileError } = await supabase.from('profiles').upsert(
       {
         id: authData.user.id,
+        email,
         full_name,
         phone,
         role,
@@ -146,7 +150,7 @@ export async function listUsers(
       );
       const enriched = (profiles ?? []).map((p) => ({
         ...p,
-        email: emailMap.get(p.id) ?? '',
+        email: emailMap.get(p.id) ?? (p.email || ''),
       }));
       apiOk(res, enriched);
     } else {
@@ -159,7 +163,7 @@ export async function listUsers(
 
 /**
  * PATCH /api/admin/users/:id
- * Update profile fields (is_active, zone, vehicle, etc.)
+ * Update profile fields & auth credentials (email, is_active, zone, vehicle, etc.)
  */
 export async function updateUser(
   req: Request,
@@ -175,10 +179,48 @@ export async function updateUser(
       return;
     }
 
-    // 1. Update in public.profiles table
+    const { email, full_name, phone, company_name, zone, vehicle, is_active } = parsed.data;
+
+    // 1. If email is being changed, update auth.users via Supabase Admin API
+    if (email) {
+      const { error: authEmailError } = await supabase.auth.admin.updateUserById(id, {
+        email: email.trim().toLowerCase(),
+        email_confirm: true,
+      });
+
+      if (authEmailError) {
+        const msg = authEmailError.message?.includes('already registered')
+          ? `L'adresse email ${email} est déjà utilisée.`
+          : `Erreur mise à jour email Auth : ${authEmailError.message}`;
+        apiError(res, 400, msg);
+        return;
+      }
+    }
+
+    // 2. Also sync display name in auth.users if full_name was changed
+    if (full_name) {
+      try {
+        await supabase.auth.admin.updateUserById(id, {
+          user_metadata: { full_name },
+        });
+      } catch (authErr) {
+        console.warn('[adminController] Note sync auth.users metadata:', authErr);
+      }
+    }
+
+    // 3. Update in public.profiles table
+    const profileUpdates: Record<string, unknown> = {};
+    if (email !== undefined) profileUpdates.email = email.trim().toLowerCase();
+    if (full_name !== undefined) profileUpdates.full_name = full_name;
+    if (phone !== undefined) profileUpdates.phone = phone;
+    if (company_name !== undefined) profileUpdates.company_name = company_name;
+    if (zone !== undefined) profileUpdates.zone = zone;
+    if (vehicle !== undefined) profileUpdates.vehicle = vehicle;
+    if (is_active !== undefined) profileUpdates.is_active = is_active;
+
     const { data: updated, error: profileError } = await supabase
       .from('profiles')
-      .update({ ...parsed.data })
+      .update(profileUpdates)
       .eq('id', id)
       .select()
       .single();
@@ -188,18 +230,7 @@ export async function updateUser(
       return;
     }
 
-    // 2. Also sync display name in auth.users if full_name was changed
-    if (parsed.data.full_name) {
-      try {
-        await supabase.auth.admin.updateUserById(id, {
-          user_metadata: { full_name: parsed.data.full_name },
-        });
-      } catch (authErr) {
-        console.warn('[adminController] Note sync auth.users metadata:', authErr);
-      }
-    }
-
-    apiOk(res, updated, 'Profil mis à jour avec succès dans la base de données.');
+    apiOk(res, updated, 'Profil et identifiants de connexion mis à jour avec succès.');
   } catch (err) {
     next(err);
   }
@@ -207,7 +238,7 @@ export async function updateUser(
 
 /**
  * POST /api/admin/users/reset-password
- * Send a password reset email via Supabase.
+ * Directly reset a user's password to the standard password (no email sent).
  */
 export async function resetUserPassword(
   req: Request,
@@ -217,24 +248,28 @@ export async function resetUserPassword(
   try {
     const parsed = resetPasswordSchema.safeParse(req.body);
     if (!parsed.success) {
-      apiError(res, 400, 'Email invalide');
+      apiError(res, 400, 'ID utilisateur invalide');
       return;
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-      redirectTo: `${process.env.FRONTEND_URL ?? 'http://localhost:5173'}/login`,
+    const { userId } = parsed.data;
+
+    // Use admin API to directly set the password — no email required
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
+      password: STANDARD_PASSWORD,
     });
 
     if (error) {
-      apiError(res, 400, error.message);
+      apiError(res, 400, `Erreur réinitialisation : ${error.message}`);
       return;
     }
 
-    apiOk(res, null, `Email de réinitialisation envoyé à ${parsed.data.email}.`);
+    apiOk(res, { userId }, `Mot de passe réinitialisé au mot de passe standard.`);
   } catch (err) {
     next(err);
   }
 }
+
 
 /**
  * DELETE /api/admin/users/:id

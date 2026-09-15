@@ -66,11 +66,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .maybeSingle();
 
       if (!error && data) {
-        const loaded = data as UserProfile;
+        const loaded: UserProfile = {
+          id: data.id,
+          email: data.email || targetUser.email || '',
+          full_name: data.full_name || (targetUser.user_metadata?.full_name as string) || 'Utilisateur',
+          phone: data.phone || (targetUser.user_metadata?.phone as string) || '',
+          role: data.role || (targetUser.user_metadata?.role as UserRole) || 'client',
+          company_name: data.company_name || (targetUser.user_metadata?.company_name as string) || '',
+          zone: data.zone || (targetUser.user_metadata?.zone as string) || '',
+          vehicle: data.vehicle || (targetUser.user_metadata?.vehicle as string) || '',
+          is_active: data.is_active !== false, // Active by default unless explicitly false
+          created_at: data.created_at || targetUser.created_at || new Date().toISOString(),
+          created_by: data.created_by || null,
+        };
         setProfile(loaded);
         setIsProfileLoading(false);
         return loaded;
       }
+
+      // If row not yet in public.profiles, create it seamlessly
+      const fallbackRole = resolveRole(targetUser, null);
+      const fallbackProfile: UserProfile = {
+        id: targetUser.id,
+        email: targetUser.email ?? '',
+        full_name: (targetUser.user_metadata?.full_name as string) || (targetUser.email?.split('@')[0] ?? 'Utilisateur'),
+        phone: (targetUser.user_metadata?.phone as string) || '',
+        role: fallbackRole,
+        company_name: (targetUser.user_metadata?.company_name as string) || '',
+        zone: (targetUser.user_metadata?.zone as string) || '',
+        vehicle: (targetUser.user_metadata?.vehicle as string) || '',
+        is_active: true,
+        created_at: targetUser.created_at ?? new Date().toISOString(),
+        created_by: null,
+      };
+
+      try {
+        await supabase.from('profiles').upsert(fallbackProfile, { onConflict: 'id' });
+      } catch {
+        // ignore
+      }
+
+      setProfile(fallbackProfile);
+      setIsProfileLoading(false);
+      return fallbackProfile;
     } catch {
       // Ignored
     }
@@ -88,18 +126,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
         if (!mounted) return;
         if (currentSession?.user) {
-          const userProfile = await fetchProfile(currentSession.user);
-          if (!userProfile || !userProfile.is_active) {
-            // Profile does not exist (deleted user) or is inactive -> force sign out
-            await supabase.auth.signOut();
-            if (mounted) {
-              setSession(null);
-              setUser(null);
-              setProfile(null);
-              setIsLoading(false);
-            }
-            return;
-          }
+          await fetchProfile(currentSession.user);
           setSession(currentSession);
           setUser(currentSession.user);
         } else {
@@ -125,15 +152,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         if (updatedSession?.user) {
-          const userProfile = await fetchProfile(updatedSession.user);
-          if (!userProfile || !userProfile.is_active) {
-            await supabase.auth.signOut();
-            setSession(null);
-            setUser(null);
-            setProfile(null);
-            setIsLoading(false);
-            return;
-          }
+          await fetchProfile(updatedSession.user);
           setSession(updatedSession);
           setUser(updatedSession.user);
         }
@@ -185,39 +204,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
       }
 
-      // Check if user profile exists in database
-      const userProfile = await fetchProfile(data.user);
-
-      if (!userProfile) {
-        // User was deleted from the database
-        await supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
-        setProfile(null);
-        return {
-          error: new Error("Ce compte a été supprimé par l'administrateur. Accès refusé."),
-          role: 'client',
-          user: null,
-          profile: null,
-        };
-      }
-
-      if (!userProfile.is_active) {
-        // User account is deactivated
-        await supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
-        setProfile(null);
-        return {
-          error: new Error("Votre compte a été désactivé par l'administrateur. Veuillez contacter la direction."),
-          role: userProfile.role,
-          user: null,
-          profile: null,
-        };
-      }
-
       setUser(data.user);
       setSession(data.session);
+      const userProfile = await fetchProfile(data.user);
       const resolved = resolveRole(data.user, userProfile);
       return { error: null, role: resolved, user: data.user, profile: userProfile };
 

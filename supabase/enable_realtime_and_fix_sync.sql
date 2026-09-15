@@ -262,5 +262,69 @@ CREATE TRIGGER trigger_notify_parcel_events
   FOR EACH ROW
   EXECUTE FUNCTION public.notify_parcel_events();
 
--- 10. Message de confirmation
-SELECT 'Supabase Realtime, Tables, Notifications & Triggers configurés avec succès !' AS result;
+-- 10. Fonction pour modifier l'adresse email partout (auth.users + auth.identities + public.profiles)
+CREATE OR REPLACE FUNCTION public.update_user_email_by_admin(target_user_id UUID, new_email TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  caller_role TEXT;
+  caller_id UUID := auth.uid();
+  clean_email TEXT := LOWER(TRIM(new_email));
+BEGIN
+  IF caller_id IS NOT NULL THEN
+    SELECT role INTO caller_role FROM public.profiles WHERE id = caller_id;
+    IF caller_role IS NULL OR caller_role != 'admin' THEN
+      RAISE EXCEPTION 'Accès refusé : Seuls les administrateurs peuvent modifier les adresses email.';
+    END IF;
+  END IF;
+
+  IF clean_email IS NULL OR clean_email = '' OR position('@' in clean_email) = 0 THEN
+    RAISE EXCEPTION 'Adresse email invalide.';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM auth.users WHERE email = clean_email AND id != target_user_id) THEN
+    RAISE EXCEPTION 'L''adresse email % est déjà utilisée par un autre compte.', clean_email;
+  END IF;
+
+  -- Mettre à jour public.profiles
+  UPDATE public.profiles
+  SET email = clean_email
+  WHERE id = target_user_id;
+
+  -- Mettre à jour auth.identities
+  UPDATE auth.identities
+  SET identity_data = jsonb_set(
+        COALESCE(identity_data, '{}'::jsonb),
+        '{email}',
+        to_jsonb(clean_email)
+      ),
+      provider_id = clean_email,
+      updated_at = now()
+  WHERE user_id = target_user_id;
+
+  -- Mettre à jour auth.users
+  UPDATE auth.users
+  SET email = clean_email,
+      email_change = '',
+      email_change_token_new = '',
+      email_change_confirm_status = 0,
+      email_confirmed_at = COALESCE(email_confirmed_at, now()),
+      updated_at = now()
+  WHERE id = target_user_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'Adresse email modifiée partout avec succès.',
+    'user_id', target_user_id,
+    'new_email', clean_email
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.update_user_email_by_admin(UUID, TEXT) TO authenticated, service_role, anon;
+
+-- 11. Message de confirmation
+SELECT 'Supabase Realtime, Tables, Notifications & Gestion Email configurés avec succès !' AS result;
