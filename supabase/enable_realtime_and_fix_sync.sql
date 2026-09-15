@@ -59,7 +59,7 @@ ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_created_by_fkey;
 ALTER TABLE public.parcels DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
 
--- 5. Activer le TEMPS RÉEL (Supabase Realtime CDC) pour toutes les tables
+-- 6. Activer le TEMPS RÉEL (Supabase Realtime CDC) pour toutes les tables
 ALTER TABLE public.parcels REPLICA IDENTITY FULL;
 ALTER TABLE public.profiles REPLICA IDENTITY FULL;
 
@@ -80,5 +80,60 @@ BEGIN
   END IF;
 END $$;
 
--- 6. Message de succès
-SELECT 'Supabase Realtime & Tables ZIHAN configurées avec succès !' AS result;
+-- 7. Fonction de suppression définitive (supprime de auth.users ET public.profiles)
+CREATE OR REPLACE FUNCTION public.delete_user_by_admin(target_user_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  caller_role TEXT;
+  caller_id UUID := auth.uid();
+BEGIN
+  IF caller_id IS NOT NULL THEN
+    SELECT role INTO caller_role FROM public.profiles WHERE id = caller_id;
+    IF caller_role IS NULL OR caller_role != 'admin' THEN
+      RAISE EXCEPTION 'Accès refusé : Seuls les administrateurs peuvent supprimer des utilisateurs.';
+    END IF;
+  END IF;
+
+  UPDATE public.parcels SET driver_id = NULL WHERE driver_id = target_user_id;
+  UPDATE public.parcels SET sender_id = NULL WHERE sender_id = target_user_id;
+
+  DELETE FROM public.profiles WHERE id = target_user_id;
+  DELETE FROM auth.identities WHERE user_id = target_user_id;
+  DELETE FROM auth.mfa_factors WHERE user_id = target_user_id;
+  DELETE FROM auth.sessions WHERE user_id = target_user_id;
+  DELETE FROM auth.users WHERE id = target_user_id;
+
+  RETURN jsonb_build_object('success', true, 'deleted_id', target_user_id);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.delete_user_by_admin(UUID) TO authenticated, service_role, anon;
+
+-- 8. Trigger de suppression cascade
+CREATE OR REPLACE FUNCTION public.on_profile_deleted_cascade_auth()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  UPDATE public.parcels SET driver_id = NULL WHERE driver_id = OLD.id;
+  UPDATE public.parcels SET sender_id = NULL WHERE sender_id = OLD.id;
+  DELETE FROM auth.identities WHERE user_id = OLD.id;
+  DELETE FROM auth.users WHERE id = OLD.id;
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trigger_on_profile_deleted_cascade_auth ON public.profiles;
+CREATE TRIGGER trigger_on_profile_deleted_cascade_auth
+  AFTER DELETE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.on_profile_deleted_cascade_auth();
+
+-- 9. Message de succès
+SELECT 'Supabase Realtime, Tables ZIHAN & Suppression complète configurées avec succès !' AS result;

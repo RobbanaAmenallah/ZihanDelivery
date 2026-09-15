@@ -238,7 +238,7 @@ export async function resetUserPassword(
 
 /**
  * DELETE /api/admin/users/:id
- * Permanently delete a user (auth + profile).
+ * Permanently delete a user (auth + profile + detach parcels).
  */
 export async function deleteUser(
   req: Request,
@@ -248,14 +248,25 @@ export async function deleteUser(
   try {
     const { id } = req.params;
 
-    const { error } = await supabase.auth.admin.deleteUser(id);
+    // 1. Detach parcels assigned to or sent by this user
+    await supabase.from('parcels').update({ driver_id: null }).eq('driver_id', id);
+    await supabase.from('parcels').update({ sender_id: null }).eq('sender_id', id);
 
-    if (error) {
-      apiError(res, 500, error.message);
+    // 2. Delete public profile row
+    const { error: profileError } = await supabase.from('profiles').delete().eq('id', id);
+    if (profileError) {
+      console.warn('[adminController] Profile delete warning:', profileError.message);
+    }
+
+    // 3. Delete from Supabase Auth
+    const { error: authError } = await supabase.auth.admin.deleteUser(id);
+
+    if (authError && !authError.message?.includes('User not found')) {
+      apiError(res, 500, authError.message);
       return;
     }
 
-    apiOk(res, { id }, 'Utilisateur supprimé définitivement.');
+    apiOk(res, { id }, 'Utilisateur supprimé définitivement (Auth + Profil).');
   } catch (err) {
     next(err);
   }

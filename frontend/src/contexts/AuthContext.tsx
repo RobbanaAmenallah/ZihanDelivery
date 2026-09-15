@@ -56,14 +56,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isProfileLoading, setIsProfileLoading] = useState<boolean>(false);
 
   // ── Fetch profile from public.profiles ──────────────────────────────────────
-  const fetchProfile = useCallback(async (targetUser: User): Promise<UserProfile> => {
+  const fetchProfile = useCallback(async (targetUser: User): Promise<UserProfile | null> => {
     setIsProfileLoading(true);
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', targetUser.id)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         const loaded = data as UserProfile;
@@ -75,24 +75,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Ignored
     }
 
-    // Fallback: build profile from auth metadata if row not yet created
-    const fallbackRole = resolveRole(targetUser, null);
-    const fallbackProfile: UserProfile = {
-      id: targetUser.id,
-      email: targetUser.email ?? '',
-      full_name: (targetUser.user_metadata?.full_name as string) || (targetUser.email?.split('@')[0] ?? 'Utilisateur'),
-      phone: (targetUser.user_metadata?.phone as string) || '',
-      role: fallbackRole,
-      company_name: (targetUser.user_metadata?.company_name as string) || '',
-      zone: (targetUser.user_metadata?.zone as string) || '',
-      vehicle: (targetUser.user_metadata?.vehicle as string) || '',
-      is_active: true,
-      created_at: targetUser.created_at ?? new Date().toISOString(),
-      created_by: null,
-    };
-    setProfile(fallbackProfile);
+    setProfile(null);
     setIsProfileLoading(false);
-    return fallbackProfile;
+    return null;
   }, []);
 
   // ── Initialise session on mount ──────────────────────────────────────────────
@@ -100,32 +85,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let mounted = true;
 
     if (SUPABASE_URL && !SUPABASE_URL.includes('placeholder')) {
-      supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
         if (!mounted) return;
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        setIsLoading(false);
-
         if (currentSession?.user) {
-          fetchProfile(currentSession.user);
+          const userProfile = await fetchProfile(currentSession.user);
+          if (!userProfile || !userProfile.is_active) {
+            // Profile does not exist (deleted user) or is inactive -> force sign out
+            await supabase.auth.signOut();
+            if (mounted) {
+              setSession(null);
+              setUser(null);
+              setProfile(null);
+              setIsLoading(false);
+            }
+            return;
+          }
+          setSession(currentSession);
+          setUser(currentSession.user);
+        } else {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
         }
+        setIsLoading(false);
       }).catch(() => {
         if (mounted) setIsLoading(false);
       });
 
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, updatedSession) => {
+      } = supabase.auth.onAuthStateChange(async (event, updatedSession) => {
         if (!mounted) return;
-        setSession(updatedSession);
-        setUser(updatedSession?.user ?? null);
-        setIsLoading(false);
+        if (event === 'SIGNED_OUT' || !updatedSession?.user) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setIsLoading(false);
+          return;
+        }
 
         if (updatedSession?.user) {
-          fetchProfile(updatedSession.user);
-        } else {
-          setProfile(null);
+          const userProfile = await fetchProfile(updatedSession.user);
+          if (!userProfile || !userProfile.is_active) {
+            await supabase.auth.signOut();
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setIsLoading(false);
+            return;
+          }
+          setSession(updatedSession);
+          setUser(updatedSession.user);
         }
+        setIsLoading(false);
       });
 
       return () => {
@@ -173,9 +185,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
       }
 
+      // Check if user profile exists in database
+      const userProfile = await fetchProfile(data.user);
+
+      if (!userProfile) {
+        // User was deleted from the database
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setProfile(null);
+        return {
+          error: new Error("Ce compte a été supprimé par l'administrateur. Accès refusé."),
+          role: 'client',
+          user: null,
+          profile: null,
+        };
+      }
+
+      if (!userProfile.is_active) {
+        // User account is deactivated
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setProfile(null);
+        return {
+          error: new Error("Votre compte a été désactivé par l'administrateur. Veuillez contacter la direction."),
+          role: userProfile.role,
+          user: null,
+          profile: null,
+        };
+      }
+
       setUser(data.user);
       setSession(data.session);
-      const userProfile = await fetchProfile(data.user);
       const resolved = resolveRole(data.user, userProfile);
       return { error: null, role: resolved, user: data.user, profile: userProfile };
 

@@ -398,7 +398,10 @@ export async function updateDbUser(
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 
 /**
- * Delete user from Supabase public.profiles & auth
+ * Delete user completely from Supabase (auth.users & public.profiles).
+ * 1. Tries Supabase RPC `delete_user_by_admin` (deletes from auth.users and profiles directly)
+ * 2. Tries backend admin API (`DELETE /api/admin/users/:id`)
+ * 3. Fallback direct profile delete + local cache purge
  */
 export async function deleteDbUser(
   userId: string,
@@ -407,22 +410,52 @@ export async function deleteDbUser(
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
 
-  // 1. Try Backend API
+  // 1. Try Supabase RPC delete_user_by_admin (Deletes auth.users + public.profiles directly)
+  if (isConfigured) {
+    try {
+      const { error: rpcError } = await client.rpc('delete_user_by_admin', {
+        target_user_id: userId,
+      });
+
+      if (!rpcError) {
+        const current = getLocalCache();
+        const filtered = current.filter((u) => u.id !== userId);
+        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(filtered));
+        return { success: true, error: null };
+      }
+    } catch {
+      // RPC not yet configured in DB, proceed to next strategies
+    }
+  }
+
+  // 2. Try Backend API (uses Supabase Service Role to delete from auth.users + public.profiles)
   if (token) {
     try {
-      await fetch(`${API_BASE}/admin/users/${userId}`, {
+      const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
       });
-    } catch { /* Backend offline */ }
+      if (res.ok) {
+        const current = getLocalCache();
+        const filtered = current.filter((u) => u.id !== userId);
+        localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(filtered));
+        return { success: true, error: null };
+      }
+    } catch {
+      // Backend offline
+    }
   }
 
-  // 2. Direct Supabase delete
+  // 3. Direct Supabase delete from public.profiles
   if (isConfigured) {
     try {
+      // Detach parcels first
+      await client.from('parcels').update({ driver_id: null }).eq('driver_id', userId);
+      await client.from('parcels').update({ sender_id: null }).eq('sender_id', userId);
+
       const { error } = await client.from('profiles').delete().eq('id', userId);
       if (error) {
         return { success: false, error: `Erreur suppression Supabase : ${error.message}` };
@@ -439,3 +472,4 @@ export async function deleteDbUser(
 
   return { success: true, error: null };
 }
+
