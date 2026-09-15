@@ -18,12 +18,12 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { CreateParcelWizard } from '@/components/parcels/CreateParcelWizard';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
 import { type Parcel } from '@/types';
-import { getDbParcels, parcelToDeliveryNoteData } from '@/services/parcelsDb';
+import { getDbParcels, parcelToDeliveryNoteData, isParcelForClient } from '@/services/parcelsDb';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
 import { useAuth } from '@/contexts/AuthContext';
 
 export const ClientDashboard: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'create' | 'shipments' | 'invoices'>('overview');
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
   const [selectedDocType, setSelectedDocType] = useState<'delivery_note' | 'invoice'>('delivery_note');
@@ -36,9 +36,10 @@ export const ClientDashboard: React.FC = () => {
   const loadParcels = useCallback(async () => {
     setIsLoading(true);
     const { parcels: fetched } = await getDbParcels();
-    setParcels(fetched);
+    const clientParcels = fetched.filter((p) => isParcelForClient(p, profile, user?.id));
+    setParcels(clientParcels);
     setIsLoading(false);
-  }, []);
+  }, [profile, user]);
 
   useEffect(() => {
     loadParcels();

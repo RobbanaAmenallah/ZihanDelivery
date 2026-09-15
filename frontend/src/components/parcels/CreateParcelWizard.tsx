@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   User,
   MapPin,
@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Modal } from '@/components/ui/modal';
 import { createDbParcel, calculateDeliveryFee } from '@/services/parcelsDb';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ALL_GOVERNORATES = [
   'Tunis',
@@ -53,17 +54,18 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
   onSuccess,
   onOpenDocumentPreview,
 }) => {
+  const { profile, user } = useAuth();
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [createdParcelId, setCreatedParcelId] = useState<string | null>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState<boolean>(false);
 
   // Form State
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     // Step 1 - Sender
-    senderName: '',
-    senderPhone: '',
-    senderAddress: '',
+    senderName: profile?.company_name || profile?.full_name || '',
+    senderPhone: profile?.phone || '',
+    senderAddress: profile?.zone || 'Grand Tunis',
     // Step 2 - Recipient
     recipientName: '',
     recipientPhone: '',
@@ -81,7 +83,18 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
     notes: '',
     // Step 4 - Pricing & Speed
     speed: 'express', // 'express' | 'standard'
-  });
+  }));
+
+  useEffect(() => {
+    if (profile) {
+      setFormData((prev) => ({
+        ...prev,
+        senderName: prev.senderName || profile.company_name || profile.full_name || '',
+        senderPhone: prev.senderPhone || profile.phone || '',
+        senderAddress: prev.senderAddress || profile.zone || 'Grand Tunis',
+      }));
+    }
+  }, [profile]);
 
   // Calculate pricing — tarif unique par client
   const baseDeliveryFee = calculateDeliveryFee(formData.governorate, formData.senderName);
@@ -102,6 +115,7 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
     setIsSubmitting(true);
     try {
       const { parcel } = await createDbParcel({
+        sender_id: profile?.id || user?.id || null,
         sender_name: formData.senderName,
         sender_phone: formData.senderPhone,
         sender_address: formData.senderAddress,

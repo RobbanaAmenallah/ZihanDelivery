@@ -14,11 +14,13 @@ import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
 import { type Parcel } from '@/types';
-import { getDbParcels, parcelToDeliveryNoteData } from '@/services/parcelsDb';
+import { getDbParcels, parcelToDeliveryNoteData, isParcelForClient } from '@/services/parcelsDb';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
+import { useAuth } from '@/contexts/AuthContext';
 import { ROUTES } from '@/routes/paths';
 
 export const ClientShipmentsPage: React.FC = () => {
+  const { profile, user } = useAuth();
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -29,9 +31,10 @@ export const ClientShipmentsPage: React.FC = () => {
   const loadParcels = useCallback(async () => {
     setIsLoading(true);
     const { parcels: fetched } = await getDbParcels();
-    setParcels(fetched);
+    const clientParcels = fetched.filter((p) => isParcelForClient(p, profile, user?.id));
+    setParcels(clientParcels);
     setIsLoading(false);
-  }, []);
+  }, [profile, user]);
 
   useEffect(() => {
     loadParcels();

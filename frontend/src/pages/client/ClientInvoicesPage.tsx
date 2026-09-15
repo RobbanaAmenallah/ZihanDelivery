@@ -3,23 +3,24 @@ import { Receipt, FileText, Download, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { InvoiceViewerModal } from '@/components/documents/InvoiceViewerModal';
-import { getDbParcels, calculateDeliveryFee } from '@/services/parcelsDb';
+import { getDbParcels, calculateDeliveryFee, isParcelForClient } from '@/services/parcelsDb';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Parcel } from '@/types';
 import type { ClientInvoiceData, InvoiceParcelItem } from '@/components/documents/ZihanInvoiceTemplate';
 
 export const ClientInvoicesPage: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const load = async () => {
       const { parcels: data } = await getDbParcels();
-      setParcels(data);
+      const clientParcels = data.filter((p) => isParcelForClient(p, profile, user?.id));
+      setParcels(clientParcels);
     };
     load();
-  }, []);
+  }, [profile, user]);
 
   const stats = useMemo(() => {
     const delivered = parcels.filter((p) => p.status === 'delivered');

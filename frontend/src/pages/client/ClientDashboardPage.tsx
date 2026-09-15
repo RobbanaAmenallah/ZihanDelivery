@@ -17,13 +17,13 @@ import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
 import { type Parcel } from '@/types';
-import { getDbParcels, parcelToDeliveryNoteData } from '@/services/parcelsDb';
+import { getDbParcels, parcelToDeliveryNoteData, isParcelForClient } from '@/services/parcelsDb';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROUTES } from '@/routes/paths';
 
 export const ClientDashboardPage: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
@@ -32,9 +32,10 @@ export const ClientDashboardPage: React.FC = () => {
   const loadParcels = useCallback(async () => {
     setIsLoading(true);
     const { parcels: fetched } = await getDbParcels();
-    setParcels(fetched);
+    const clientParcels = fetched.filter((p) => isParcelForClient(p, profile, user?.id));
+    setParcels(clientParcels);
     setIsLoading(false);
-  }, []);
+  }, [profile, user]);
 
   useEffect(() => {
     loadParcels();
@@ -90,11 +91,11 @@ export const ClientDashboardPage: React.FC = () => {
               Tableau de Bord Client
             </h1>
             <span className="bg-[#1B3D87]/10 text-[#1B3D87] text-xs font-bold px-2.5 py-0.5 rounded-full">
-              {profile?.company_name || 'Boutique Mode Express'}
+              {profile?.company_name || profile?.full_name || 'Espace Client'}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Suivi des ventes, livraisons en cours et solde de reversement COD en direct.
+            Suivi de vos ventes, livraisons en cours et solde de reversement COD en direct.
           </p>
         </div>
 
@@ -148,75 +149,46 @@ export const ClientDashboardPage: React.FC = () => {
           value={`${stats.totalDeliveryFees.toFixed(3)} DT`}
           icon={<Truck className="h-5 w-5 text-[#EA4E52]" />}
           iconBgColor="bg-red-50 dark:bg-red-950/50"
-          description="7 DT Grand Tunis / 10 DT Autres"
+          description="Total frais de livraison"
         />
       </div>
 
-      {/* ── Quick Action & Tarification Banner ─────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Quick Actions Card */}
-        <Card className="md:col-span-2 shadow-sm bg-gradient-to-br from-[#1B3D87]/5 via-card to-card border-[#1B3D87]/20">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <h3 className="text-lg font-black text-[#1B3D87] dark:text-blue-400 flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-amber-500" />
-                  Expédition &amp; Bon de Commande Officiel
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Générez instantanément votre bordereau de livraison A4 imprimable et suivez son statut en temps réel.
-                </p>
-              </div>
-              <Link to={ROUTES.CLIENT_CREATE}>
-                <Button className="bg-[#1B3D87] hover:bg-[#1D5AA5] text-white font-bold">
-                  + Créer un Bon
-                </Button>
-              </Link>
+      {/* ── Quick Action Card ─────────────────────────────── */}
+      <Card className="shadow-sm bg-gradient-to-br from-[#1B3D87]/5 via-card to-card border-[#1B3D87]/20">
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-lg font-black text-[#1B3D87] dark:text-blue-400 flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-amber-500" />
+                Expédition &amp; Bon de Commande Officiel
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Générez instantanément votre bordereau de livraison A4 imprimable et suivez son statut en temps réel.
+              </p>
             </div>
+            <Link to={ROUTES.CLIENT_CREATE}>
+              <Button className="bg-[#1B3D87] hover:bg-[#1D5AA5] text-white font-bold whitespace-nowrap">
+                + Créer un Bon
+              </Button>
+            </Link>
+          </div>
 
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/60 text-xs">
-              <div className="bg-card p-3 rounded-xl border border-border/80 text-center">
-                <span className="text-[10px] uppercase text-muted-foreground font-bold block">En Attente</span>
-                <span className="text-base font-black text-amber-600">{stats.pendingCount}</span>
-              </div>
-              <div className="bg-card p-3 rounded-xl border border-border/80 text-center">
-                <span className="text-[10px] uppercase text-muted-foreground font-bold block">En Acheminement</span>
-                <span className="text-base font-black text-[#1B3D87]">{stats.inTransitCount}</span>
-              </div>
-              <div className="bg-card p-3 rounded-xl border border-border/80 text-center">
-                <span className="text-[10px] uppercase text-muted-foreground font-bold block">Livrés avec Succès</span>
-                <span className="text-base font-black text-emerald-600">{stats.deliveredCount}</span>
-              </div>
+          <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/60 text-xs">
+            <div className="bg-card p-3.5 rounded-xl border border-border/80 text-center">
+              <span className="text-[10px] uppercase text-muted-foreground font-bold block">En Attente</span>
+              <span className="text-lg font-black text-amber-600">{stats.pendingCount}</span>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Official Pricing Card */}
-        <Card className="shadow-sm">
-          <CardContent className="p-5 space-y-3">
-            <h4 className="text-xs font-black text-[#1B3D87] uppercase tracking-wider">
-              Tarification ZIHAN Express
-            </h4>
-            <div className="space-y-2 text-xs">
-              <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-[#1B3D87] dark:text-blue-300">Grand Tunis</p>
-                  <p className="text-[10px] text-muted-foreground">Tunis, Ariana, Ben Arous, Manouba</p>
-                </div>
-                <span className="font-black text-sm text-[#1B3D87]">7.000 DT</span>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-purple-800 dark:text-purple-300">Hors Grand Tunis</p>
-                  <p className="text-[10px] text-muted-foreground">Toutes les autres régions</p>
-                </div>
-                <span className="font-black text-sm text-purple-800 dark:text-purple-300">10.000 DT</span>
-              </div>
+            <div className="bg-card p-3.5 rounded-xl border border-border/80 text-center">
+              <span className="text-[10px] uppercase text-muted-foreground font-bold block">En Acheminement</span>
+              <span className="text-lg font-black text-[#1B3D87]">{stats.inTransitCount}</span>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            <div className="bg-card p-3.5 rounded-xl border border-border/80 text-center">
+              <span className="text-[10px] uppercase text-muted-foreground font-bold block">Livrés avec Succès</span>
+              <span className="text-lg font-black text-emerald-600">{stats.deliveredCount}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ── Recent 5 Shipments Table ─────────────────────────────────────────── */}
       <Card className="shadow-sm overflow-hidden">

@@ -1,5 +1,5 @@
 import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
-import { type Parcel, type CreateParcelPayload, type UpdateParcelPayload, type ParcelStatus } from '@/types';
+import { type Parcel, type CreateParcelPayload, type UpdateParcelPayload, type ParcelStatus, type UserProfile } from '@/types';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
 
 const LOCAL_PARCELS_KEY = 'zihan_managed_parcels';
@@ -76,6 +76,51 @@ export function calculateDeliveryFee(_governorate: string, senderNameOrId?: stri
   }
 
   return 8.0; // Tarif par défaut ZIHAN (toute Tunisie)
+}
+
+/**
+ * Check if a parcel belongs to a specific client
+ * Matches by sender_id, company_name, full_name, or phone
+ */
+export function isParcelForClient(
+  parcel: Parcel,
+  profile: UserProfile | null,
+  userId?: string | null
+): boolean {
+  if (!profile && !userId) return false;
+
+  // 1. Exact sender_id match (UUID)
+  const targetId = profile?.id || userId;
+  if (targetId && parcel.sender_id && parcel.sender_id === targetId) {
+    return true;
+  }
+
+  // 2. Company name match (case-insensitive)
+  if (profile?.company_name && profile.company_name.trim()) {
+    const comp = profile.company_name.trim().toLowerCase();
+    if (parcel.sender_name && parcel.sender_name.trim().toLowerCase() === comp) {
+      return true;
+    }
+  }
+
+  // 3. Full name match (case-insensitive)
+  if (profile?.full_name && profile.full_name.trim()) {
+    const fn = profile.full_name.trim().toLowerCase();
+    if (parcel.sender_name && parcel.sender_name.trim().toLowerCase() === fn) {
+      return true;
+    }
+  }
+
+  // 4. Phone match (ignoring spaces)
+  if (profile?.phone && profile.phone.trim()) {
+    const pClean = profile.phone.replace(/\s+/g, '');
+    const senderClean = (parcel.sender_phone || '').replace(/\s+/g, '');
+    if (pClean && senderClean && pClean === senderClean) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // ─── READ ─────────────────────────────────────────────────────────────────────
@@ -227,6 +272,7 @@ export async function createDbParcel(
         .from('parcels')
         .insert({
           tracking_number: newParcel.tracking_number,
+          sender_id: newParcel.sender_id || null,
           sender_name: newParcel.sender_name,
           sender_phone: newParcel.sender_phone,
           sender_address: newParcel.sender_address,
