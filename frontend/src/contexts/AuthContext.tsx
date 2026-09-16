@@ -41,8 +41,36 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 // ─── Helper to infer role ─────────────────────────────────────────────────────
 
 function resolveRole(user: User | null, profile: UserProfile | null): UserRole {
-  if (profile?.role) return profile.role as UserRole;
-  if (user?.user_metadata?.role) return user.user_metadata.role as UserRole;
+  // 1. Explicit profile role from DB
+  if (profile?.role && ['admin', 'driver', 'client'].includes(profile.role)) {
+    return profile.role as UserRole;
+  }
+
+  // 2. User metadata role (from Supabase Auth user_metadata or app_metadata)
+  if (user?.user_metadata?.role && ['admin', 'driver', 'client'].includes(user.user_metadata.role)) {
+    return user.user_metadata.role as UserRole;
+  }
+  if (user?.app_metadata?.role && ['admin', 'driver', 'client'].includes(user.app_metadata.role)) {
+    return user.app_metadata.role as UserRole;
+  }
+
+  // 3. Known admin email detection (fallback safety)
+  const email = (user?.email || profile?.email || '').trim().toLowerCase();
+  if (
+    email === 'admin@zihan.tn' ||
+    email === 'samiayed1965@gmail.com' ||
+    email.startsWith('admin@') ||
+    email.startsWith('direction@') ||
+    email.includes('admin')
+  ) {
+    return 'admin';
+  }
+
+  // 4. Known driver email detection
+  if (email === 'livreur@zihan.tn' || email.startsWith('driver@') || email.startsWith('livreur@')) {
+    return 'driver';
+  }
+
   return 'client';
 }
 
@@ -66,12 +94,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .maybeSingle();
 
       if (!error && data) {
+        // Resolve role: prefer data.role, but check fallback if data.role is missing or default
+        const inferredRole = (data.role as UserRole) || resolveRole(targetUser, null);
         const loaded: UserProfile = {
           id: data.id,
           email: data.email || targetUser.email || '',
           full_name: data.full_name || (targetUser.user_metadata?.full_name as string) || 'Utilisateur',
           phone: data.phone || (targetUser.user_metadata?.phone as string) || '',
-          role: data.role || (targetUser.user_metadata?.role as UserRole) || 'client',
+          role: inferredRole,
           company_name: data.company_name || (targetUser.user_metadata?.company_name as string) || '',
           zone: data.zone || (targetUser.user_metadata?.zone as string) || '',
           vehicle: data.vehicle || (targetUser.user_metadata?.vehicle as string) || '',
@@ -79,6 +109,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           created_at: data.created_at || targetUser.created_at || new Date().toISOString(),
           created_by: data.created_by || null,
         };
+
+        // If email is an admin email but DB profile had missing role, sync it to DB
+        if (inferredRole === 'admin' && data.role !== 'admin') {
+          supabase.from('profiles').update({ role: 'admin' }).eq('id', targetUser.id).then(() => {});
+        }
+
         setProfile(loaded);
         setIsProfileLoading(false);
         return loaded;

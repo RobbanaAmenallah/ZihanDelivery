@@ -36,6 +36,16 @@ export const LoginPage: React.FC = () => {
     return ROUTES.ADMIN;
   };
 
+  const getDestination = (r: UserRole): string => {
+    if (from) {
+      if (r === 'admin' && from.startsWith('/admin')) return from;
+      if (r === 'client' && from.startsWith('/client')) return from;
+      if (r === 'driver' && from.startsWith('/driver')) return from;
+      if (from === ROUTES.PROFILE) return from;
+    }
+    return getRoleRedirect(r);
+  };
+
   // Purge any leftover demo/fake localStorage session on page load
   useEffect(() => {
     localStorage.removeItem('zihan_demo_user');
@@ -44,7 +54,7 @@ export const LoginPage: React.FC = () => {
   // Auto redirect if user is already authenticated via Supabase
   useEffect(() => {
     if (user && role) {
-      navigate(from ?? getRoleRedirect(role), { replace: true });
+      navigate(getDestination(role), { replace: true });
     }
   }, [user, role, from, navigate]);
 
@@ -80,9 +90,10 @@ export const LoginPage: React.FC = () => {
     }
 
     // Direct navigation using resolved role
-    const destination = from ?? getRoleRedirect(resolvedRole);
+    const destination = getDestination(resolvedRole);
     navigate(destination, { replace: true });
   };
+
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background font-sans">
