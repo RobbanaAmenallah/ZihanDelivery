@@ -1,6 +1,7 @@
 import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import { type Parcel, type CreateParcelPayload, type UpdateParcelPayload, type ParcelStatus, type UserProfile } from '@/types';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
+import { getDbClientPricing } from './clientPricingDb';
 
 const LOCAL_PARCELS_KEY = 'zihan_managed_parcels';
 
@@ -139,6 +140,9 @@ export async function getDbParcels(): Promise<{
 
   if (isConfigured) {
     try {
+      // Refresh client pricing rules in background
+      getDbClientPricing().catch(() => {});
+
       const { data, error } = await client
         .from('parcels')
         .select('*')
