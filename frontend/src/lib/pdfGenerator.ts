@@ -2,50 +2,53 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 /**
- * Downloads a DOM element as a pixel-perfect, unscaled high-quality A4 PDF document.
+ * Downloads a DOM element as a pixel-perfect, unscaled high-quality PDF document (A4 or A6).
  * 
  * @param sourceElement HTMLElement to render into PDF
- * @param filename File name for the downloaded PDF (ex: 'Bon_de_Commande_ZH000153.pdf')
+ * @param filename File name for the downloaded PDF
+ * @param format 'a4' (210x297mm) or 'a6' (105x148mm)
  */
 export async function downloadElementAsPdf(
   sourceElement: HTMLElement,
-  filename: string = 'Bon_de_Commande_ZIHAN.pdf',
+  filename: string = 'Document_ZIHAN.pdf',
   format: 'a4' | 'a6' = 'a4'
 ): Promise<void> {
   const isA6 = format === 'a6';
-
-  // 1. Create an isolated off-screen clone with exact dimensions and NO parent transforms
-  const clone = sourceElement.cloneNode(true) as HTMLElement;
-  
-  // Strip any parent CSS transforms or scale
-  clone.style.transform = 'none';
-  clone.style.margin = '0';
-  clone.style.padding = '0';
-  clone.style.width = isA6 ? '397px' : '794px';
-  clone.style.minHeight = isA6 ? '560px' : '1123px';
-  clone.style.boxShadow = 'none';
-  clone.style.backgroundColor = '#ffffff';
-  clone.style.color = '#162033';
-  clone.style.position = 'absolute';
-  clone.style.left = '-9999px';
-  clone.style.top = '0';
-
-  document.body.appendChild(clone);
+  const targetElement = (sourceElement.firstElementChild as HTMLElement) || sourceElement;
 
   try {
-    // 2. Render to high-DPI canvas
-    const canvas = await html2canvas(clone, {
-      scale: 2, // 2x resolution for razor-sharp barcodes, QR codes and text
+    // 1. Render directly to high-DPI canvas from the live rendered DOM element
+    const canvas = await html2canvas(targetElement, {
+      scale: 3, // 3x resolution for razor-sharp barcodes, QR codes, borders and text
       useCORS: true,
+      allowTaint: true,
       logging: false,
       backgroundColor: '#ffffff',
-      width: isA6 ? 397 : 794,
-      windowWidth: isA6 ? 600 : 1200,
+      scrollX: 0,
+      scrollY: 0,
     });
 
-    const imgData = canvas.toDataURL('image/png');
+    const imgData = canvas.toDataURL('image/png', 1.0);
 
-    // 3. Create PDF (A4: 210mm x 297mm, A6: 105mm x 148mm)
+    // 2. Target Page Dimensions in mm
+    const pageWidth = isA6 ? 105 : 210;
+    const pageHeight = isA6 ? 148 : 297;
+
+    const canvasRatio = canvas.width / canvas.height;
+
+    // Calculate fitted dimensions preserving exact aspect ratio without distortion or clipping
+    let renderWidth = pageWidth;
+    let renderHeight = pageWidth / canvasRatio;
+
+    if (renderHeight > pageHeight) {
+      renderHeight = pageHeight;
+      renderWidth = pageHeight * canvasRatio;
+    }
+
+    const xOffset = (pageWidth - renderWidth) / 2;
+    const yOffset = (pageHeight - renderHeight) / 2;
+
+    // 3. Create PDF
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -53,20 +56,14 @@ export async function downloadElementAsPdf(
       compress: true,
     });
 
-    const pdfWidth = isA6 ? 105 : 210;
-    const maxHeight = isA6 ? 148 : 297;
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-    // 4. Fit cleanly within boundaries
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, Math.min(pdfHeight, maxHeight));
+    // 4. Place image centered and fitted
+    pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderWidth, renderHeight, undefined, 'FAST');
 
     // 5. Trigger download
     const cleanFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
     pdf.save(cleanFilename);
-  } finally {
-    // 6. Clean up off-screen clone
-    if (document.body.contains(clone)) {
-      document.body.removeChild(clone);
-    }
+  } catch (err) {
+    console.error('Erreur de génération PDF:', err);
+    throw err;
   }
 }

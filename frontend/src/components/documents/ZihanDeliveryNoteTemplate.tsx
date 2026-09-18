@@ -116,12 +116,8 @@ export const ZihanDeliveryNoteTemplate: React.FC<ZihanDeliveryNoteTemplateProps>
         flexDirection: 'column',
       }}
     >
-      {/* ── 5 cm ESPACE VIDE EN HAUT (zone scotch / adhésif) ─────────────── */}
-      {/* 1 cm ≈ 37.8 px  →  5 cm = 189 px */}
-      <div style={{ height: '189px', flexShrink: 0 }} />
-
       {/* ── BANDEAU BLEU ────────────────────────────────────────────────── */}
-      <div style={{ backgroundColor: BLUE, padding: '14px 28px', flexShrink: 0 }}>
+      <div style={{ backgroundColor: BLUE, padding: '16px 28px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo officiel */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -702,10 +698,6 @@ export const ZihanDeliveryNoteTemplate: React.FC<ZihanDeliveryNoteTemplateProps>
           </div>
         </div>
       </div>
-
-      {/* ── 3 cm ESPACE VIDE EN BAS (zone scotch / adhésif) ─────────────── */}
-      {/* 3 cm = 113 px */}
-      <div style={{ height: '113px', flexShrink: 0 }} />
     </div>
   );
 };
