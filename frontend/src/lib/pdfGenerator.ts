@@ -9,17 +9,20 @@ import html2canvas from 'html2canvas';
  */
 export async function downloadElementAsPdf(
   sourceElement: HTMLElement,
-  filename: string = 'Bon_de_Commande_ZIHAN.pdf'
+  filename: string = 'Bon_de_Commande_ZIHAN.pdf',
+  format: 'a4' | 'a6' = 'a4'
 ): Promise<void> {
-  // 1. Create an isolated off-screen clone with exact A4 dimensions (794px width) and NO parent transforms
+  const isA6 = format === 'a6';
+
+  // 1. Create an isolated off-screen clone with exact dimensions and NO parent transforms
   const clone = sourceElement.cloneNode(true) as HTMLElement;
   
   // Strip any parent CSS transforms or scale
   clone.style.transform = 'none';
   clone.style.margin = '0';
   clone.style.padding = '0';
-  clone.style.width = '794px';
-  clone.style.minHeight = '1123px';
+  clone.style.width = isA6 ? '397px' : '794px';
+  clone.style.minHeight = isA6 ? '560px' : '1123px';
   clone.style.boxShadow = 'none';
   clone.style.backgroundColor = '#ffffff';
   clone.style.color = '#162033';
@@ -36,25 +39,26 @@ export async function downloadElementAsPdf(
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
-      width: 794,
-      windowWidth: 1200,
+      width: isA6 ? 397 : 794,
+      windowWidth: isA6 ? 600 : 1200,
     });
 
     const imgData = canvas.toDataURL('image/png');
 
-    // 3. Create A4 PDF (210mm x 297mm)
+    // 3. Create PDF (A4: 210mm x 297mm, A6: 105mm x 148mm)
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: 'a4',
+      format: isA6 ? 'a6' : 'a4',
       compress: true,
     });
 
-    const pdfWidth = 210;
+    const pdfWidth = isA6 ? 105 : 210;
+    const maxHeight = isA6 ? 148 : 297;
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
-    // 4. Fit cleanly within A4 boundaries
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, Math.min(pdfHeight, 297));
+    // 4. Fit cleanly within boundaries
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, Math.min(pdfHeight, maxHeight));
 
     // 5. Trigger download
     const cleanFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;

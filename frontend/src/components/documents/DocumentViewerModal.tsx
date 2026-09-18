@@ -38,6 +38,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     trackingNumber: deliveryNoteData.trackingNumber || 'ZH000153',
     senderName: deliveryNoteData.sender?.name || 'Expéditeur',
     senderPhone: deliveryNoteData.sender?.phone || '',
+    senderAddress: deliveryNoteData.sender?.address || deliveryNoteData.sender?.city || '',
     recipientName: deliveryNoteData.recipient?.name || 'Destinataire',
     recipientPhone: deliveryNoteData.recipient?.phone || '',
     secondaryPhone: deliveryNoteData.recipient?.secondaryPhone,
@@ -45,7 +46,11 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     city: deliveryNoteData.recipient?.city || '',
     governorate: deliveryNoteData.recipient?.governorate || '',
     postalCode: deliveryNoteData.recipient?.postalCode,
+    description: deliveryNoteData.items?.[0]?.designation || 'Marchandise Mode & Colis',
+    quantity: deliveryNoteData.items?.[0]?.quantity || 1,
+    weight: 1.0,
     amountToCollect: deliveryNoteData.totalToCollect ?? deliveryNoteData.parcelValue ?? 0,
+    goodsAmount: deliveryNoteData.parcelValue ?? 0,
     deliveryFee: deliveryNoteData.deliveryFee ?? 0,
     isFragile: false,
     notes: deliveryNoteData.notes,
@@ -68,7 +73,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           ? `Etiquette_ZIHAN_${trackingNumber}.pdf`
           : `Bon_de_Livraison_${trackingNumber}.pdf`;
 
-      await downloadElementAsPdf(printRef.current, filename);
+      await downloadElementAsPdf(printRef.current, filename, docType === 'label' ? 'a6' : 'a4');
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 3000);
     } catch (err) {
