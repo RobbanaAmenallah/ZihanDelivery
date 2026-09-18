@@ -47,7 +47,6 @@ const clientNavItems: NavItem[] = [
   { title: 'Tableau de Bord', href: ROUTES.CLIENT, icon: LayoutDashboard },
   { title: 'Mes Expéditions', href: ROUTES.CLIENT_SHIPMENTS, icon: Package, badge: 'Suivi', badgeVariant: 'primary' },
   { title: 'Nouveau Bon', href: ROUTES.CLIENT_CREATE, icon: PlusCircle },
-  { title: 'Mes Factures', href: ROUTES.CLIENT_INVOICES, icon: Receipt },
 ];
 
 const driverNavItems: NavItem[] = [

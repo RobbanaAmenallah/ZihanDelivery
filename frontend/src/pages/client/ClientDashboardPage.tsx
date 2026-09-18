@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Package,
   PlusCircle,
   DollarSign,
-  CheckCircle2,
-  Truck,
   ArrowRight,
   RefreshCw,
   FileText,
   Sparkles,
+  TrendingUp,
+  RotateCcw,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -46,37 +46,56 @@ export const ClientDashboardPage: React.FC = () => {
     setIsDocModalOpen(true);
   };
 
-  // Client-specific statistics
+  // Client-specific statistics — strictly from client money & stock perspective
   const stats = useMemo(() => {
     const totalParcels = parcels.length;
+
+    // Delivered (Livrés & Encaissés)
     const deliveredParcels = parcels.filter((p) => p.status === 'delivered');
     const deliveredCount = deliveredParcels.length;
-    const pendingCount = parcels.filter((p) => p.status === 'pending').length;
-    const inTransitCount = parcels.filter((p) =>
-      ['accepted', 'assigned', 'picked_up', 'in_transit'].includes(p.status)
-    ).length;
-    const issuesCount = parcels.filter((p) =>
-      ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused'].includes(p.status)
-    ).length;
+    const deliveredGoodsAmount = deliveredParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
 
-    // Financials
+    // Pending in warehouse / deposit (En attente / En dépôt)
+    const pendingParcels = parcels.filter((p) => p.status === 'pending');
+    const pendingCount = pendingParcels.length;
+    const pendingGoodsAmount = pendingParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
+
+    // In transit / out for delivery (En cours d'acheminement)
+    const inTransitParcels = parcels.filter((p) =>
+      ['accepted', 'assigned', 'picked_up', 'in_transit'].includes(p.status)
+    );
+    const inTransitCount = inTransitParcels.length;
+    const inTransitGoodsAmount = inTransitParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
+
+    // Total in progress / in depot not yet delivered (Argents en dépôt & en cours)
+    const inDepotCount = pendingCount + inTransitCount;
+    const inDepotGoodsAmount = pendingGoodsAmount + inTransitGoodsAmount;
+
+    // Returned / failed / refused (Retours / Non livrés)
+    const returnedParcels = parcels.filter((p) =>
+      ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused', 'cancelled'].includes(p.status)
+    );
+    const returnedCount = returnedParcels.length;
+    const returnedGoodsAmount = returnedParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
+
+    // Total merchandise value entrusted to ZIHAN (Valeur totale confiée)
     const totalGoodsValue = parcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
-    const totalDeliveryFees = parcels.reduce((sum, p) => sum + (p.delivery_fee || 0), 0);
-    const collectedGoodsAmount = deliveredParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
-    const totalCODToCollect = parcels.reduce((sum, p) => sum + (p.total_amount || 0), 0);
 
     const successRate = totalParcels > 0 ? Math.round((deliveredCount / totalParcels) * 100) : 0;
 
     return {
       totalParcels,
       deliveredCount,
+      deliveredGoodsAmount,
       pendingCount,
+      pendingGoodsAmount,
       inTransitCount,
-      issuesCount,
+      inTransitGoodsAmount,
+      inDepotCount,
+      inDepotGoodsAmount,
+      returnedCount,
+      returnedGoodsAmount,
       totalGoodsValue,
-      totalDeliveryFees,
-      collectedGoodsAmount,
-      totalCODToCollect,
       successRate,
     };
   }, [parcels]);
@@ -95,7 +114,7 @@ export const ClientDashboardPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Suivi de vos ventes, livraisons en cours et solde de reversement COD en direct.
+            Suivi en temps réel de vos marchandises : argents livrés, fonds en dépôt et livraisons en cours.
           </p>
         </div>
 
@@ -122,34 +141,42 @@ export const ClientDashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── 4 Main KPI Cards ───────────────────────────────────────────────── */}
+      {/* ── 4 Main Financial KPI Cards (Client Perspective) ────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Card 1: Argents Livrés (Encaissés) */}
         <StatCard
-          title="Total Expéditions"
-          value={stats.totalParcels}
-          icon={<Package className="h-5 w-5 text-[#1B3D87]" />}
-          description={`${stats.inTransitCount} en cours d'acheminement`}
-        />
-        <StatCard
-          title="Taux de Réussite"
-          value={`${stats.successRate}%`}
-          icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+          title="Argents Livrés (Encaissés)"
+          value={`${stats.deliveredGoodsAmount.toFixed(3)} DT`}
+          icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
           iconBgColor="bg-emerald-50 dark:bg-emerald-950/50"
-          description={`${stats.deliveredCount} colis livrés`}
+          description={`${stats.deliveredCount} colis livrés et encaissés`}
         />
+
+        {/* Card 2: Argents en Dépôt & En Cours */}
         <StatCard
-          title="Solde Articles Encaissé"
-          value={`${stats.collectedGoodsAmount.toFixed(3)} DT`}
-          icon={<DollarSign className="h-5 w-5 text-amber-600" />}
+          title="Argents en Dépôt & En Cours"
+          value={`${stats.inDepotGoodsAmount.toFixed(3)} DT`}
+          icon={<Clock className="h-5 w-5 text-[#1B3D87]" />}
+          iconBgColor="bg-blue-50 dark:bg-blue-950/50"
+          description={`${stats.inDepotCount} colis non encore livrés`}
+        />
+
+        {/* Card 3: Argents Non Livrés / Retours */}
+        <StatCard
+          title="Argents Non Livrés / Retours"
+          value={`${stats.returnedGoodsAmount.toFixed(3)} DT`}
+          icon={<RotateCcw className="h-5 w-5 text-amber-600" />}
           iconBgColor="bg-amber-50 dark:bg-amber-950/50"
-          description="À vous reverser par ZIHAN"
+          description={`${stats.returnedCount} colis retours ou incidents`}
         />
+
+        {/* Card 4: Total Marchandises Confiées */}
         <StatCard
-          title="Frais de Port ZIHAN"
-          value={`${stats.totalDeliveryFees.toFixed(3)} DT`}
-          icon={<Truck className="h-5 w-5 text-[#EA4E52]" />}
-          iconBgColor="bg-red-50 dark:bg-red-950/50"
-          description="Total frais de livraison"
+          title="Total Marchandises Confiées"
+          value={`${stats.totalGoodsValue.toFixed(3)} DT`}
+          icon={<TrendingUp className="h-5 w-5 text-purple-600" />}
+          iconBgColor="bg-purple-50 dark:bg-purple-950/50"
+          description={`${stats.totalParcels} colis au total (${stats.successRate}% succès)`}
         />
       </div>
 
@@ -163,7 +190,7 @@ export const ClientDashboardPage: React.FC = () => {
                 Expédition &amp; Bon de Commande Officiel
               </h3>
               <p className="text-xs text-muted-foreground">
-                Générez instantanément votre bordereau de livraison A4 imprimable et suivez son statut en temps réel.
+                Générez instantanément votre bordereau de livraison A4 imprimable et suivez l'avancement de vos encaissements.
               </p>
             </div>
             <Link to={ROUTES.CLIENT_CREATE}>
@@ -175,16 +202,25 @@ export const ClientDashboardPage: React.FC = () => {
 
           <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/60 text-xs">
             <div className="bg-card p-3.5 rounded-xl border border-border/80 text-center">
-              <span className="text-[10px] uppercase text-muted-foreground font-bold block">En Attente</span>
+              <span className="text-[10px] uppercase text-muted-foreground font-bold block">En Dépôt / Attente</span>
               <span className="text-lg font-black text-amber-600">{stats.pendingCount}</span>
+              <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">
+                {stats.pendingGoodsAmount.toFixed(1)} DT
+              </span>
             </div>
             <div className="bg-card p-3.5 rounded-xl border border-border/80 text-center">
               <span className="text-[10px] uppercase text-muted-foreground font-bold block">En Acheminement</span>
               <span className="text-lg font-black text-[#1B3D87]">{stats.inTransitCount}</span>
+              <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">
+                {stats.inTransitGoodsAmount.toFixed(1)} DT
+              </span>
             </div>
             <div className="bg-card p-3.5 rounded-xl border border-border/80 text-center">
-              <span className="text-[10px] uppercase text-muted-foreground font-bold block">Livrés avec Succès</span>
+              <span className="text-[10px] uppercase text-muted-foreground font-bold block">Livrés &amp; Encaissés</span>
               <span className="text-lg font-black text-emerald-600">{stats.deliveredCount}</span>
+              <span className="text-[10px] text-emerald-600 font-mono font-bold block mt-0.5">
+                {stats.deliveredGoodsAmount.toFixed(1)} DT
+              </span>
             </div>
           </div>
         </CardContent>
@@ -212,7 +248,7 @@ export const ClientDashboardPage: React.FC = () => {
                   <th className="py-3">Destinataire</th>
                   <th className="py-3">Gouvernorat</th>
                   <th className="py-3">Statut</th>
-                  <th className="py-3 text-right">Montant COD</th>
+                  <th className="py-3 text-right">Valeur Marchandise</th>
                   <th className="py-3 text-right">Bon PDF</th>
                 </tr>
               </thead>
@@ -240,8 +276,8 @@ export const ClientDashboardPage: React.FC = () => {
                       <td className="py-3">
                         <StatusBadge status={parcel.status} size="sm" />
                       </td>
-                      <td className="py-3 text-right font-mono font-bold text-foreground">
-                        {parcel.total_amount.toFixed(3)} DT
+                      <td className="py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {(parcel.goods_amount || 0).toFixed(3)} DT
                       </td>
                       <td className="py-3 text-right">
                         <Button

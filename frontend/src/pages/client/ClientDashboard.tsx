@@ -2,14 +2,12 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   PlusCircle,
   Package,
-  Receipt,
   FileText,
   Printer,
   RefreshCw,
   DollarSign,
   CheckCircle2,
   Search,
-  Truck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -24,9 +22,8 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export const ClientDashboard: React.FC = () => {
   const { profile, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'create' | 'shipments' | 'invoices'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'create' | 'shipments'>('overview');
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
-  const [selectedDocType, setSelectedDocType] = useState<'delivery_note' | 'invoice'>('delivery_note');
   const [selectedParcelForDoc, setSelectedParcelForDoc] = useState<DeliveryNoteData | null>(null);
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -45,8 +42,7 @@ export const ClientDashboard: React.FC = () => {
     loadParcels();
   }, [loadParcels]);
 
-  const handleOpenDoc = (type: 'delivery_note' | 'invoice', parcel?: Parcel) => {
-    setSelectedDocType(type);
+  const handleOpenDoc = (parcel?: Parcel) => {
     if (parcel) {
       setSelectedParcelForDoc(parcelToDeliveryNoteData(parcel));
     }
@@ -62,33 +58,44 @@ export const ClientDashboard: React.FC = () => {
     setActiveTab('shipments');
   };
 
-  // Client-specific statistics
+  // Client-specific statistics — strictly client money perspective
   const stats = useMemo(() => {
     const totalParcels = parcels.length;
     const deliveredParcels = parcels.filter((p) => p.status === 'delivered');
     const deliveredCount = deliveredParcels.length;
-    const pendingCount = parcels.filter((p) => p.status === 'pending').length;
-    const inTransitCount = parcels.filter((p) => ['accepted', 'assigned', 'picked_up', 'in_transit'].includes(p.status)).length;
-    const issuesCount = parcels.filter((p) => ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused'].includes(p.status)).length;
+    const deliveredGoodsAmount = deliveredParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
 
-    // Financials
+    const pendingParcels = parcels.filter((p) => p.status === 'pending');
+    const pendingCount = pendingParcels.length;
+    const pendingGoodsAmount = pendingParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
+
+    const inTransitParcels = parcels.filter((p) => ['accepted', 'assigned', 'picked_up', 'in_transit'].includes(p.status));
+    const inTransitCount = inTransitParcels.length;
+    const inTransitGoodsAmount = inTransitParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
+
+    const inDepotCount = pendingCount + inTransitCount;
+    const inDepotGoodsAmount = pendingGoodsAmount + inTransitGoodsAmount;
+
+    const returnedParcels = parcels.filter((p) => ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused'].includes(p.status));
+    const returnedCount = returnedParcels.length;
+    const returnedGoodsAmount = returnedParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
+
     const totalGoodsValue = parcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
-    const totalDeliveryFees = parcels.reduce((sum, p) => sum + (p.delivery_fee || 0), 0);
-    const collectedGoodsAmount = deliveredParcels.reduce((sum, p) => sum + (p.goods_amount || 0), 0);
-    const totalCODToCollect = parcels.reduce((sum, p) => sum + (p.total_amount || 0), 0);
-
     const successRate = totalParcels > 0 ? Math.round((deliveredCount / totalParcels) * 100) : 0;
 
     return {
       totalParcels,
       deliveredCount,
+      deliveredGoodsAmount,
       pendingCount,
+      pendingGoodsAmount,
       inTransitCount,
-      issuesCount,
+      inTransitGoodsAmount,
+      inDepotCount,
+      inDepotGoodsAmount,
+      returnedCount,
+      returnedGoodsAmount,
       totalGoodsValue,
-      totalDeliveryFees,
-      collectedGoodsAmount,
-      totalCODToCollect,
       successRate,
     };
   }, [parcels]);
@@ -130,7 +137,7 @@ export const ClientDashboard: React.FC = () => {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Suivi des ventes, gestion des expéditions et téléchargement des bons de commande officiels ZIHAN.
+            Suivi des encaissements, des marchandises en dépôt et téléchargement des bons de commande.
           </p>
         </div>
 
@@ -161,26 +168,17 @@ export const ClientDashboard: React.FC = () => {
           >
             Mes Expéditions ({parcels.length})
           </Button>
-          <Button
-            variant={activeTab === 'invoices' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setActiveTab('invoices')}
-            leftIcon={<Receipt className="h-4 w-4" />}
-            className={activeTab === 'invoices' ? 'bg-[#1B3D87] text-white' : ''}
-          >
-            Factures
-          </Button>
         </div>
       </div>
 
-      {/* Real Statistics Cards */}
+      {/* Real Statistics Cards — Client Perspective */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="border-l-4 border-l-[#1B3D87] shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase">Total Colis</p>
               <p className="text-2xl font-black text-foreground">{stats.totalParcels}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{stats.inTransitCount} en cours d'acheminement</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{stats.inDepotCount} en dépôt / cours</p>
             </div>
             <div className="p-2.5 bg-blue-50 dark:bg-blue-950/60 rounded-xl text-[#1B3D87]">
               <Package className="h-5 w-5" />
@@ -191,12 +189,25 @@ export const ClientDashboard: React.FC = () => {
         <Card className="border-l-4 border-l-emerald-500 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Taux Réussite</p>
-              <p className="text-2xl font-black text-emerald-600">{stats.successRate}%</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Argents Livrés</p>
+              <p className="text-2xl font-black text-emerald-600">{stats.deliveredGoodsAmount.toFixed(1)} <span className="text-xs font-bold text-muted-foreground">DT</span></p>
               <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">{stats.deliveredCount} colis livrés</p>
             </div>
             <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl text-emerald-600">
-              <CheckCircle2 className="h-5 w-5" />
+              <DollarSign className="h-5 w-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-blue-500 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Argents en Dépôt</p>
+              <p className="text-xl font-black text-foreground">{stats.inDepotGoodsAmount.toFixed(1)} <span className="text-xs font-bold text-muted-foreground">DT</span></p>
+              <p className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">Non encore livrés</p>
+            </div>
+            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/60 rounded-xl text-blue-600">
+              <Package className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
@@ -204,25 +215,12 @@ export const ClientDashboard: React.FC = () => {
         <Card className="border-l-4 border-l-amber-500 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Solde Marchandises</p>
-              <p className="text-xl font-black text-foreground">{stats.collectedGoodsAmount.toFixed(1)} <span className="text-xs font-bold text-muted-foreground">DT</span></p>
-              <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">Encaissé à vous reverser</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Taux Réussite</p>
+              <p className="text-2xl font-black text-amber-600">{stats.successRate}%</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{stats.returnedCount} retours</p>
             </div>
             <div className="p-2.5 bg-amber-50 dark:bg-amber-950/60 rounded-xl text-amber-600">
-              <DollarSign className="h-5 w-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-[#EA4E52] shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Frais ZIHAN</p>
-              <p className="text-xl font-black text-foreground">{stats.totalDeliveryFees.toFixed(1)} <span className="text-xs font-bold text-muted-foreground">DT</span></p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">7 DT Tunis / 10 DT Hors Tunis</p>
-            </div>
-            <div className="p-2.5 bg-red-50 dark:bg-red-950/60 rounded-xl text-[#EA4E52]">
-              <Truck className="h-5 w-5" />
+              <CheckCircle2 className="h-5 w-5" />
             </div>
           </CardContent>
         </Card>
@@ -346,7 +344,7 @@ export const ClientDashboard: React.FC = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenDoc('delivery_note', parcel)}
+                            onClick={() => handleOpenDoc(parcel)}
                             className="h-6 px-2 text-[11px] text-[#1B3D87] font-bold"
                           >
                             Bon PDF
@@ -366,7 +364,7 @@ export const ClientDashboard: React.FC = () => {
       {activeTab === 'create' && (
         <CreateParcelWizard
           onSuccess={handleCreatedSuccess}
-          onOpenDocumentPreview={() => handleOpenDoc('delivery_note')}
+          onOpenDocumentPreview={() => handleOpenDoc()}
         />
       )}
 
@@ -392,7 +390,7 @@ export const ClientDashboard: React.FC = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleOpenDoc('delivery_note', parcels[0])}
+                  onClick={() => handleOpenDoc(parcels[0])}
                   leftIcon={<Printer className="h-4 w-4" />}
                 >
                   Dernier Bon
@@ -458,8 +456,8 @@ export const ClientDashboard: React.FC = () => {
                     <th className="p-3">Destinataire</th>
                     <th className="p-3">Gouvernorat &amp; Ville</th>
                     <th className="p-3">Statut</th>
+                    <th className="p-3 text-right">Valeur Marchandise</th>
                     <th className="p-3 text-right">À Encaisser (COD)</th>
-                    <th className="p-3 text-right">Frais Port</th>
                     <th className="p-3 text-right">Bon de Commande</th>
                   </tr>
                 </thead>
@@ -487,18 +485,18 @@ export const ClientDashboard: React.FC = () => {
                         <td className="p-3">
                           <StatusBadge status={parcel.status} size="sm" />
                         </td>
+                        <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {(parcel.goods_amount || 0).toFixed(3)} DT
+                        </td>
                         <td className="p-3 text-right font-mono font-bold text-foreground">
                           {parcel.total_amount.toFixed(3)} DT
-                        </td>
-                        <td className="p-3 text-right font-mono text-muted-foreground">
-                          {parcel.delivery_fee.toFixed(3)} DT
                         </td>
                         <td className="p-3 text-right">
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-7 px-2.5 text-xs text-[#1B3D87] font-bold bg-blue-50/50 hover:bg-blue-100 border border-blue-200"
-                            onClick={() => handleOpenDoc('delivery_note', parcel)}
+                            onClick={() => handleOpenDoc(parcel)}
                             leftIcon={<FileText className="h-3.5 w-3.5" />}
                           >
                             Bon PDF
@@ -514,42 +512,6 @@ export const ClientDashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* TAB 3: Client Invoices */}
-      {activeTab === 'invoices' && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Mes Factures &amp; Relevés de Compte</CardTitle>
-              <CardDescription>Historique des prestations de livraison ZIHAN facturées</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-xl border border-border p-4 flex items-center justify-between bg-card">
-              <div className="space-y-1">
-                <p className="font-mono font-bold text-[#1B3D87]">FAC-ZH-2026-000001</p>
-                <p className="text-xs text-muted-foreground">Période du mois en cours • {stats.deliveredCount} livraisons effectuées</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="font-mono font-black text-foreground">{stats.totalDeliveryFees.toFixed(3)} DT TTC</p>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                    À Jour
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleOpenDoc('invoice')}
-                  leftIcon={<Receipt className="h-4 w-4" />}
-                >
-                  Télécharger Facture
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Document Viewer Modal with PDF download */}
       <DocumentViewerModal
         isOpen={isDocModalOpen}
@@ -558,7 +520,7 @@ export const ClientDashboard: React.FC = () => {
           setSelectedParcelForDoc(null);
         }}
         deliveryNoteData={selectedParcelForDoc || undefined}
-        initialType={selectedDocType}
+        initialType="delivery_note"
       />
     </div>
   );

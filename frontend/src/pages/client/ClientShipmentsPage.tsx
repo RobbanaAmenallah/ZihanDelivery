@@ -180,8 +180,8 @@ export const ClientShipmentsPage: React.FC = () => {
                   <th className="p-3">Gouvernorat &amp; Ville</th>
                   <th className="p-3">Contenu</th>
                   <th className="p-3">Statut</th>
-                  <th className="p-3 text-right">Montant COD</th>
-                  <th className="p-3 text-right">Frais Port</th>
+                  <th className="p-3 text-right">Valeur Marchandise</th>
+                  <th className="p-3 text-right">À Encaisser (COD)</th>
                   <th className="p-3 text-right">Bon de Commande</th>
                 </tr>
               </thead>
@@ -219,11 +219,11 @@ export const ClientShipmentsPage: React.FC = () => {
                       <td className="p-3">
                         <StatusBadge status={parcel.status} size="sm" />
                       </td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {(parcel.goods_amount || 0).toFixed(3)} DT
+                      </td>
                       <td className="p-3 text-right font-mono font-bold text-foreground">
                         {parcel.total_amount.toFixed(3)} DT
-                      </td>
-                      <td className="p-3 text-right font-mono text-muted-foreground">
-                        {parcel.delivery_fee.toFixed(3)} DT
                       </td>
                       <td className="p-3 text-right">
                         <Button

@@ -1,5 +1,4 @@
-import React from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/layouts/MainLayout';
 import { LandingPage } from '@/pages/public/LandingPage';
 import { PublicTrackingPage } from '@/pages/public/PublicTrackingPage';
@@ -17,7 +16,6 @@ import { AdminInvoicesPage } from '@/pages/admin/AdminInvoicesPage';
 import { ClientDashboardPage } from '@/pages/client/ClientDashboardPage';
 import { ClientShipmentsPage } from '@/pages/client/ClientShipmentsPage';
 import { ClientCreateParcelPage } from '@/pages/client/ClientCreateParcelPage';
-import { ClientInvoicesPage } from '@/pages/client/ClientInvoicesPage';
 
 // Driver Pages
 import { DriverDashboardPage } from '@/pages/driver/DriverDashboardPage';
@@ -77,7 +75,7 @@ const router = createBrowserRouter([
       { path: ROUTES.CLIENT, element: <ClientDashboardPage /> },
       { path: ROUTES.CLIENT_SHIPMENTS, element: <ClientShipmentsPage /> },
       { path: ROUTES.CLIENT_CREATE, element: <ClientCreateParcelPage /> },
-      { path: ROUTES.CLIENT_INVOICES, element: <ClientInvoicesPage /> },
+      { path: ROUTES.CLIENT_INVOICES, element: <Navigate to={ROUTES.CLIENT} replace /> },
     ],
   },
 
