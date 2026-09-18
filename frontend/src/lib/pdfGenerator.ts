@@ -2,18 +2,18 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 /**
- * Downloads a DOM element as a pixel-perfect, unscaled high-quality PDF document (A4 or A6).
+ * Downloads a DOM element as a pixel-perfect, unscaled high-quality PDF document (A4 or Thermal 100x150mm).
  * 
  * @param sourceElement HTMLElement to render into PDF
  * @param filename File name for the downloaded PDF
- * @param format 'a4' (210x297mm) or 'a6' (105x148mm)
+ * @param format 'a4' (210x297mm) or 'a6' (100x150mm standard thermal shipping format)
  */
 export async function downloadElementAsPdf(
   sourceElement: HTMLElement,
   filename: string = 'Document_ZIHAN.pdf',
   format: 'a4' | 'a6' = 'a4'
 ): Promise<void> {
-  const isA6 = format === 'a6';
+  const isLabel = format === 'a6';
   const targetElement = (sourceElement.firstElementChild as HTMLElement) || sourceElement;
 
   try {
@@ -30,9 +30,9 @@ export async function downloadElementAsPdf(
 
     const imgData = canvas.toDataURL('image/png', 1.0);
 
-    // 2. Target Page Dimensions in mm
-    const pageWidth = isA6 ? 105 : 210;
-    const pageHeight = isA6 ? 148 : 297;
+    // 2. Target Page Dimensions in mm (100x150mm for direct thermal, 210x297mm for A4)
+    const pageWidth = isLabel ? 100 : 210;
+    const pageHeight = isLabel ? 150 : 297;
 
     const canvasRatio = canvas.width / canvas.height;
 
@@ -48,15 +48,15 @@ export async function downloadElementAsPdf(
     const xOffset = (pageWidth - renderWidth) / 2;
     const yOffset = (pageHeight - renderHeight) / 2;
 
-    // 3. Create PDF
+    // 3. Create PDF with exact page format
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
-      format: isA6 ? 'a6' : 'a4',
+      format: isLabel ? [100, 150] : 'a4',
       compress: true,
     });
 
-    // 4. Place image centered and fitted
+    // 4. Place image centered and full-bleed
     pdf.addImage(imgData, 'PNG', xOffset, yOffset, renderWidth, renderHeight, undefined, 'FAST');
 
     // 5. Trigger download
@@ -67,3 +67,4 @@ export async function downloadElementAsPdf(
     throw err;
   }
 }
+
