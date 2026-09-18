@@ -5,6 +5,9 @@ import {
   updateUser,
   resetUserPassword,
   deleteUser,
+  listClientPricingRules,
+  saveClientPricingRuleController,
+  deleteClientPricingRuleController,
 } from '../controllers/admin.controller.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
 
@@ -20,4 +23,10 @@ adminRouter.patch('/users/:id', updateUser);
 adminRouter.delete('/users/:id', deleteUser);
 adminRouter.post('/users/reset-password', resetUserPassword);
 
+// Client pricing rules
+adminRouter.get('/client-pricing', listClientPricingRules);
+adminRouter.post('/client-pricing', saveClientPricingRuleController);
+adminRouter.delete('/client-pricing/:id', deleteClientPricingRuleController);
+
 export default adminRouter;
+

@@ -306,3 +306,112 @@ export async function deleteUser(
     next(err);
   }
 }
+
+/**
+ * GET /api/admin/client-pricing
+ * List all client pricing rules using service role
+ */
+export async function listClientPricingRules(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from('client_pricing_rules')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      apiError(res, 500, `Erreur Supabase : ${error.message}`);
+      return;
+    }
+
+    apiOk(res, data ?? []);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/admin/client-pricing
+ * Create or update a client pricing rule using service role (bypasses RLS)
+ */
+export async function saveClientPricingRuleController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { id, client_id, client_name, company_name, flat_rate, custom_note, is_active } = req.body;
+
+    if (!client_name) {
+      apiError(res, 400, 'Le nom du client est requis');
+      return;
+    }
+
+    const payload = {
+      client_id: client_id || null,
+      client_name: String(client_name).trim(),
+      company_name: String(company_name || client_name).trim(),
+      flat_rate: Number(flat_rate) || 8.0,
+      custom_note: custom_note ? String(custom_note).trim() : '',
+      is_active: is_active !== false,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (id && !String(id).startsWith('pr_')) {
+      const { data, error } = await supabase
+        .from('client_pricing_rules')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        apiError(res, 500, error.message);
+        return;
+      }
+      apiOk(res, data, 'Tarif mis à jour avec succès.');
+    } else {
+      const { data, error } = await supabase
+        .from('client_pricing_rules')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) {
+        apiError(res, 500, error.message);
+        return;
+      }
+      apiOk(res, data, 'Tarif créé avec succès.');
+    }
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/admin/client-pricing/:id
+ * Delete a client pricing rule using service role
+ */
+export async function deleteClientPricingRuleController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase.from('client_pricing_rules').delete().eq('id', id);
+
+    if (error) {
+      apiError(res, 500, error.message);
+      return;
+    }
+
+    apiOk(res, { id }, 'Tarif supprimé avec succès.');
+  } catch (err) {
+    next(err);
+  }
+}
+
