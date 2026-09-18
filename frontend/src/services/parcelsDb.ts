@@ -325,7 +325,8 @@ export async function createDbParcel(
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
 
 /**
- * Update parcel status, driver or fields in Supabase
+ * Update parcel details, status, driver, or pricing in Supabase & local cache.
+ * Can be used by Admin to modify any field at any stage (even after delivery).
  */
 export async function updateDbParcel(
   parcelId: string,
@@ -339,20 +340,46 @@ export async function updateDbParcel(
       const updateData: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
-      if (payload.status !== undefined) updateData.status = payload.status;
-      if (payload.driver_name !== undefined) updateData.driver_name = payload.driver_name;
+
+      // 1. Expéditeur (Sender)
+      if (payload.sender_name !== undefined) updateData.sender_name = payload.sender_name;
+      if (payload.sender_phone !== undefined) updateData.sender_phone = payload.sender_phone;
+      if (payload.sender_address !== undefined) updateData.sender_address = payload.sender_address;
+
+      // 2. Destinataire & Adresse (Recipient)
       if (payload.recipient_name !== undefined) updateData.recipient_name = payload.recipient_name;
       if (payload.recipient_phone !== undefined) updateData.recipient_phone = payload.recipient_phone;
-      if (payload.recipient_governorate !== undefined) {
+      if (payload.recipient_secondary_phone !== undefined)
+        updateData.recipient_secondary_phone = payload.recipient_secondary_phone;
+      if (payload.recipient_governorate !== undefined)
         updateData.recipient_governorate = payload.recipient_governorate;
-        updateData.delivery_fee = calculateDeliveryFee(payload.recipient_governorate);
-      }
-      if (payload.goods_amount !== undefined) updateData.goods_amount = payload.goods_amount;
+      if (payload.recipient_delegation !== undefined)
+        updateData.recipient_delegation = payload.recipient_delegation;
+      if (payload.recipient_address !== undefined)
+        updateData.recipient_address = payload.recipient_address;
+      if (payload.recipient_postal_code !== undefined)
+        updateData.recipient_postal_code = payload.recipient_postal_code;
+
+      // 3. Marchandise & Poids (Goods)
+      if (payload.description !== undefined) updateData.description = payload.description;
+      if (payload.quantity !== undefined) updateData.quantity = Number(payload.quantity);
+      if (payload.weight !== undefined) updateData.weight = Number(payload.weight);
+      if (payload.is_fragile !== undefined) updateData.is_fragile = Boolean(payload.is_fragile);
+
+      // 4. Tarification & Montants (Pricing)
+      if (payload.goods_amount !== undefined) updateData.goods_amount = Number(payload.goods_amount);
+      if (payload.delivery_fee !== undefined) updateData.delivery_fee = Number(payload.delivery_fee);
+      if (payload.total_amount !== undefined) updateData.total_amount = Number(payload.total_amount);
+
+      // 5. Livreur & Statut (Driver & Status)
+      if (payload.driver_name !== undefined) updateData.driver_name = payload.driver_name;
+      if (payload.driver_id !== undefined) updateData.driver_id = payload.driver_id;
+      if (payload.status !== undefined) updateData.status = payload.status;
       if (payload.notes !== undefined) updateData.notes = payload.notes;
 
       await client.from('parcels').update(updateData).eq('id', parcelId);
-    } catch {
-      // Fall through to local cache update
+    } catch (err) {
+      console.error('Erreur update Supabase parcel:', err);
     }
   }
 
@@ -360,7 +387,23 @@ export async function updateDbParcel(
   const current = getLocalCache();
   const updated = current.map((p) => {
     if (p.id === parcelId || p.tracking_number === parcelId) {
-      return { ...p, ...payload };
+      const gAmount = payload.goods_amount !== undefined ? Number(payload.goods_amount) : p.goods_amount;
+      const dFee = payload.delivery_fee !== undefined ? Number(payload.delivery_fee) : p.delivery_fee;
+      const tAmount =
+        payload.total_amount !== undefined
+          ? Number(payload.total_amount)
+          : payload.goods_amount !== undefined || payload.delivery_fee !== undefined
+          ? gAmount + dFee
+          : p.total_amount;
+
+      return {
+        ...p,
+        ...payload,
+        goods_amount: gAmount,
+        delivery_fee: dFee,
+        total_amount: tAmount,
+        updated_at: new Date().toISOString(),
+      };
     }
     return p;
   });

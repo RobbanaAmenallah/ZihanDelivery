@@ -147,6 +147,9 @@ export interface CreateParcelPayload {
 
 
 export interface UpdateParcelPayload {
+  sender_name?: string;
+  sender_phone?: string;
+  sender_address?: string;
   recipient_name?: string;
   recipient_phone?: string;
   recipient_secondary_phone?: string;
@@ -162,6 +165,7 @@ export interface UpdateParcelPayload {
   delivery_fee?: number;
   total_amount?: number;
   driver_name?: string;
+  driver_id?: string | null;
   status?: ParcelStatus;
   notes?: string;
 }

@@ -12,6 +12,8 @@ import {
   Trash2,
   UserCog,
   Loader2,
+  Pencil,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,6 +24,7 @@ import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal'
 import {
   type Parcel,
   type CreateParcelPayload,
+  type UpdateParcelPayload,
   type ParcelStatus,
   type UserProfile,
 } from '@/types';
@@ -60,6 +63,55 @@ export const ParcelsManagementPage: React.FC = () => {
   const [selectedParcelForDoc, setSelectedParcelForDoc] = useState<DeliveryNoteData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Edit Parcel modal state (Admin Full Control)
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [editingParcel, setEditingParcel] = useState<Parcel | null>(null);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const [editFormError, setEditFormError] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    sender_name: string;
+    sender_phone: string;
+    sender_address: string;
+    recipient_name: string;
+    recipient_phone: string;
+    recipient_secondary_phone: string;
+    recipient_governorate: string;
+    recipient_delegation: string;
+    recipient_address: string;
+    recipient_postal_code: string;
+    description: string;
+    quantity: number;
+    weight: number;
+    is_fragile: boolean;
+    goods_amount: number;
+    delivery_fee: number;
+    total_amount: number;
+    driver_name: string;
+    status: ParcelStatus;
+    notes: string;
+  }>({
+    sender_name: '',
+    sender_phone: '',
+    sender_address: '',
+    recipient_name: '',
+    recipient_phone: '',
+    recipient_secondary_phone: '',
+    recipient_governorate: 'Tunis',
+    recipient_delegation: '',
+    recipient_address: '',
+    recipient_postal_code: '',
+    description: '',
+    quantity: 1,
+    weight: 1.0,
+    is_fragile: false,
+    goods_amount: 0,
+    delivery_fee: 8,
+    total_amount: 8,
+    driver_name: '',
+    status: 'pending',
+    notes: '',
+  });
 
   // Assignment modal state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState<boolean>(false);
@@ -255,7 +307,89 @@ export const ParcelsManagementPage: React.FC = () => {
     setIsDocModalOpen(true);
   };
 
-  // ── 5. Status Quick Change ──────────────────────────────────────────────────
+  // ── 5. Open Edit Modal (Full Admin Control) ─────────────────────────────────
+  const handleOpenEditModal = (parcel: Parcel) => {
+    setEditingParcel(parcel);
+    setEditForm({
+      sender_name: parcel.sender_name || '',
+      sender_phone: parcel.sender_phone || '',
+      sender_address: parcel.sender_address || '',
+      recipient_name: parcel.recipient_name || '',
+      recipient_phone: parcel.recipient_phone || '',
+      recipient_secondary_phone: parcel.recipient_secondary_phone || '',
+      recipient_governorate: parcel.recipient_governorate || 'Tunis',
+      recipient_delegation: parcel.recipient_delegation || '',
+      recipient_address: parcel.recipient_address || '',
+      recipient_postal_code: parcel.recipient_postal_code || '',
+      description: parcel.description || '',
+      quantity: parcel.quantity || 1,
+      weight: parcel.weight || 1.0,
+      is_fragile: Boolean(parcel.is_fragile),
+      goods_amount: parcel.goods_amount ?? 0,
+      delivery_fee: parcel.delivery_fee ?? 8,
+      total_amount: parcel.total_amount ?? ((parcel.goods_amount ?? 0) + (parcel.delivery_fee ?? 8)),
+      driver_name: parcel.driver_name || '',
+      status: parcel.status,
+      notes: parcel.notes || '',
+    });
+    setEditFormError(null);
+    setIsEditModalOpen(true);
+  };
+
+  // ── 6. Submit Parcel Edit Handler ───────────────────────────────────────────
+  const handleUpdateParcel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingParcel) return;
+    setEditFormError(null);
+
+    if (!editForm.recipient_name || !editForm.recipient_phone || !editForm.recipient_address) {
+      setEditFormError('Veuillez remplir les champs obligatoires du destinataire (Nom, Téléphone, Adresse).');
+      return;
+    }
+
+    setIsUpdating(true);
+    const goodsAmount = Number(editForm.goods_amount || 0);
+    const deliveryFee = Number(editForm.delivery_fee || 0);
+    const totalAmount = Number(editForm.total_amount !== undefined ? editForm.total_amount : goodsAmount + deliveryFee);
+
+    const updatePayload: UpdateParcelPayload = {
+      ...editForm,
+      goods_amount: goodsAmount,
+      delivery_fee: deliveryFee,
+      total_amount: totalAmount,
+      quantity: Number(editForm.quantity || 1),
+      weight: Number(editForm.weight || 1.0),
+    };
+
+    const { error } = await updateDbParcel(editingParcel.id, updatePayload);
+    setIsUpdating(false);
+
+    if (error) {
+      showToast(`⚠️ Mise à jour locale (${error}).`);
+    }
+
+    setParcels((prev) =>
+      prev.map((p) =>
+        p.id === editingParcel.id
+          ? {
+              ...p,
+              ...updatePayload,
+              goods_amount: goodsAmount,
+              delivery_fee: deliveryFee,
+              total_amount: totalAmount,
+              quantity: Number(editForm.quantity || 1),
+              weight: Number(editForm.weight || 1.0),
+              is_fragile: Boolean(editForm.is_fragile),
+            }
+          : p
+      )
+    );
+
+    setIsEditModalOpen(false);
+    showToast(`✅ Colis ${editingParcel.tracking_number} modifié avec succès (Détails & Prix enregistrés) !`);
+  };
+
+  // ── 7. Status Quick Change ──────────────────────────────────────────────────
   const handleStatusChange = async (parcelId: string, newStatus: ParcelStatus) => {
     await updateDbParcel(parcelId, { status: newStatus });
     setParcels((prev) =>
@@ -264,7 +398,7 @@ export const ParcelsManagementPage: React.FC = () => {
     showToast(`Statut mis à jour : ${newStatus}`);
   };
 
-  // ── 6. Delete Parcel ────────────────────────────────────────────────────────
+  // ── 8. Delete Parcel ────────────────────────────────────────────────────────
   const handleDeleteParcel = async (parcelId: string, trackingNumber: string) => {
     if (window.confirm(`Supprimer définitivement le colis ${trackingNumber} ?`)) {
       await deleteDbParcel(parcelId);
@@ -647,6 +781,17 @@ export const ParcelsManagementPage: React.FC = () => {
                       {/* Actions */}
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenEditModal(parcel)}
+                            leftIcon={<Pencil className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />}
+                            className="bg-amber-50/60 hover:bg-amber-100/80 border-amber-300 text-amber-900 dark:text-amber-300 font-bold text-xs h-7 px-2.5"
+                            title="Modifier le prix ou n'importe quel détail (Admin)"
+                          >
+                            Modifier
+                          </Button>
+
                           <Button
                             variant="outline"
                             size="sm"
@@ -1088,6 +1233,377 @@ export const ParcelsManagementPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── EDIT PARCEL MODAL (ADMIN FULL OVERRIDE) ──────────────────────────────── */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingParcel(null);
+        }}
+        size="3xl"
+        title={
+          <div className="flex items-center gap-2">
+            <Pencil className="h-5 w-5 text-amber-600" />
+            <span>Modifier le Colis {editingParcel?.tracking_number} (Mode Administrateur)</span>
+          </div>
+        }
+        description="Modification totale débridée : changez le prix (COD, Port, Total), destinataire, expéditeur, livreur et statut (même après livraison)."
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <div className="text-[11px] text-muted-foreground hidden sm:flex items-center gap-1.5">
+              <ShieldCheck className="h-4 w-4 text-amber-600" />
+              <span>Privilège Super Admin : modification sans restriction de statut</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingParcel(null);
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                form="edit-parcel-form"
+                variant="default"
+                size="sm"
+                isLoading={isUpdating}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+              >
+                Enregistrer les Modifications
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <form id="edit-parcel-form" onSubmit={handleUpdateParcel} className="space-y-3 text-xs">
+          {/* Status Alert if Already Delivered */}
+          {editingParcel?.status === 'delivered' && (
+            <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs font-semibold">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>
+                <strong>Colis Déjà Livré :</strong> Vous pouvez ajuster le montant encaissé, les frais ou toute coordonnée. Les statistiques et totaux seront instantanément recalculés.
+              </span>
+            </div>
+          )}
+
+          {editFormError && (
+            <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-800 p-2.5 rounded-lg text-xs font-semibold">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{editFormError}</span>
+            </div>
+          )}
+
+          {/* 3-Column Responsive Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+            {/* Section 1: Expéditeur */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-border/60 space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#1B3D87] border-b border-border/40 pb-1 flex items-center justify-between">
+                <span>1. Expéditeur (Vendeur)</span>
+                <span className="font-mono text-gray-500 font-normal">#{editingParcel?.tracking_number}</span>
+              </p>
+
+              <Input
+                label="Nom / Raison Sociale *"
+                placeholder="Boutique Express"
+                value={editForm.sender_name}
+                onChange={(e) => setEditForm({ ...editForm, sender_name: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+                required
+              />
+              <Input
+                label="Téléphone Expéditeur"
+                placeholder="+216 71 000 000"
+                value={editForm.sender_phone}
+                onChange={(e) => setEditForm({ ...editForm, sender_phone: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+              />
+              <Input
+                label="Adresse d'enlèvement"
+                placeholder="Charguia, Tunis..."
+                value={editForm.sender_address}
+                onChange={(e) => setEditForm({ ...editForm, sender_address: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+              />
+
+              <div>
+                <label className="text-[10px] font-bold text-foreground mb-0.5 block">Statut du Colis</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ParcelStatus })}
+                  className="w-full h-8 px-2 rounded-lg border border-border bg-background text-xs font-semibold"
+                >
+                  <option value="pending">🟡 En attente de validation</option>
+                  <option value="accepted">🔵 Accepté Hub</option>
+                  <option value="assigned">🚀 Assigné livreur</option>
+                  <option value="in_transit">🚚 En cours de livraison</option>
+                  <option value="delivered">🟢 Livré avec succès</option>
+                  <option value="customer_absent">🟠 Client absent</option>
+                  <option value="wrong_address">🔴 Adresse incorrecte</option>
+                  <option value="failed">❌ Échec de livraison</option>
+                  <option value="refused">⛔ Refusé par le client</option>
+                  <option value="returned">↩️ Retourné à l'expéditeur</option>
+                  <option value="cancelled">✖️ Annulé</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Section 2: Destinataire & Localisation */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-border/60 space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#1B3D87] border-b border-border/40 pb-1">
+                2. Destinataire &amp; Adresse
+              </p>
+
+              <Input
+                label="Nom &amp; Prénom Destinataire *"
+                placeholder="Mohamed Ben Ali"
+                value={editForm.recipient_name}
+                onChange={(e) => setEditForm({ ...editForm, recipient_name: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+                required
+              />
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <Input
+                  label="Téléphone 1 *"
+                  placeholder="+216 22 000 000"
+                  value={editForm.recipient_phone}
+                  onChange={(e) => setEditForm({ ...editForm, recipient_phone: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                  required
+                />
+                <Input
+                  label="Téléphone 2"
+                  placeholder="+216 98 111 222"
+                  value={editForm.recipient_secondary_phone}
+                  onChange={(e) => setEditForm({ ...editForm, recipient_secondary_phone: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <div>
+                  <label className="text-[10px] font-bold text-foreground mb-0.5 block">Gouvernorat *</label>
+                  <select
+                    value={editForm.recipient_governorate}
+                    onChange={(e) => {
+                      const newGov = e.target.value;
+                      setEditForm((prev) => ({
+                        ...prev,
+                        recipient_governorate: newGov,
+                      }));
+                    }}
+                    className="w-full h-8 px-1.5 rounded-lg border border-border bg-background text-xs font-semibold"
+                  >
+                    <optgroup label="Grand Tunis">
+                      {GRAND_TUNIS_GOVERNORATES.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Hors Grand Tunis">
+                      {ALL_TUNISIAN_GOVERNORATES.filter((g) => !GRAND_TUNIS_GOVERNORATES.includes(g)).map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+
+                <Input
+                  label="Ville"
+                  placeholder="Nouvelle Médina"
+                  value={editForm.recipient_delegation}
+                  onChange={(e) => setEditForm({ ...editForm, recipient_delegation: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+
+                <Input
+                  label="Code Postal"
+                  placeholder="2063"
+                  value={editForm.recipient_postal_code}
+                  onChange={(e) => setEditForm({ ...editForm, recipient_postal_code: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+              </div>
+
+              <Input
+                label="Adresse Complète *"
+                placeholder="Résidence Ennasr, Bloc B, Apt 14, Rue..."
+                value={editForm.recipient_address}
+                onChange={(e) => setEditForm({ ...editForm, recipient_address: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+                required
+              />
+            </div>
+
+            {/* Section 3: Marchandise, Tarification & Livreur */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-border/60 space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#1B3D87] border-b border-border/40 pb-1">
+                3. Marchandise &amp; Tarification
+              </p>
+
+              <Input
+                label="Désignation Marchandise *"
+                placeholder="Chaussures Sport ZIHAN"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+                required
+              />
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <Input
+                  label="Qté"
+                  type="number"
+                  min="1"
+                  value={editForm.quantity}
+                  onChange={(e) => setEditForm({ ...editForm, quantity: parseInt(e.target.value, 10) || 1 })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+                <Input
+                  label="Poids (kg)"
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  value={editForm.weight}
+                  onChange={(e) => setEditForm({ ...editForm, weight: parseFloat(e.target.value) || 1.0 })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
+                <div className="flex flex-col justify-end pb-1">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold">
+                    <input
+                      type="checkbox"
+                      checked={editForm.is_fragile}
+                      onChange={(e) => setEditForm({ ...editForm, is_fragile: e.target.checked })}
+                      className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    />
+                    <span className={editForm.is_fragile ? 'text-red-600 font-bold' : 'text-gray-600'}>Fragile</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-foreground mb-0.5 block">Livreur Assigné</label>
+                <select
+                  value={editForm.driver_name}
+                  onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })}
+                  className="w-full h-8 px-1.5 rounded-lg border border-border bg-background text-xs font-semibold"
+                >
+                  <option value="">-- Aucun livreur assigné --</option>
+                  {drivers.map((driver) => (
+                    <option key={driver.id} value={driver.full_name}>
+                      {driver.full_name} {driver.zone ? `(${driver.zone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Editable Pricing Box */}
+              <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-lg space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800 pb-1">
+                  Tarification &amp; Encaissment (DT)
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-foreground mb-0.5 block">
+                      Article / Marchandise (DT)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={editForm.goods_amount}
+                      onChange={(e) => {
+                        const g = parseFloat(e.target.value) || 0;
+                        setEditForm((prev) => ({
+                          ...prev,
+                          goods_amount: g,
+                          total_amount: g + prev.delivery_fee,
+                        }));
+                      }}
+                      className="w-full h-8 px-2 rounded-lg border border-amber-300 bg-white dark:bg-amber-950 text-foreground text-xs font-bold font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[10px] font-bold text-foreground block">
+                        Frais Livraison (Port)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const autoFee = calculateDeliveryFee(editForm.recipient_governorate, editForm.sender_name);
+                          setEditForm((prev) => ({
+                            ...prev,
+                            delivery_fee: autoFee,
+                            total_amount: prev.goods_amount + autoFee,
+                          }));
+                        }}
+                        className="text-[9px] text-amber-700 underline font-semibold hover:text-amber-900"
+                        title="Calculer selon gouvernorat"
+                      >
+                        Auto
+                      </button>
+                    </div>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={editForm.delivery_fee}
+                      onChange={(e) => {
+                        const d = parseFloat(e.target.value) || 0;
+                        setEditForm((prev) => ({
+                          ...prev,
+                          delivery_fee: d,
+                          total_amount: prev.goods_amount + d,
+                        }));
+                      }}
+                      className="w-full h-8 px-2 rounded-lg border border-amber-300 bg-white dark:bg-amber-950 text-foreground text-xs font-bold font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Total override */}
+                <div className="flex items-center justify-between border-t border-amber-200 dark:border-amber-800 pt-1.5">
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-amber-900 dark:text-amber-200 block">
+                      Total À Encaisser (COD)
+                    </span>
+                    <span className="text-[8.5px] text-muted-foreground">
+                      (Article + Port ou Saisie Libre)
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={editForm.total_amount}
+                    onChange={(e) => {
+                      const t = parseFloat(e.target.value) || 0;
+                      setEditForm((prev) => ({ ...prev, total_amount: t }));
+                    }}
+                    className="w-28 h-8 px-2 rounded-lg border-2 border-amber-500 bg-white dark:bg-amber-950 text-amber-900 dark:text-amber-200 text-sm font-black font-mono text-right focus:outline-none focus:ring-2 focus:ring-amber-600"
+                  />
+                </div>
+              </div>
+
+              <Input
+                label="Notes / Consignes Spéciales"
+                placeholder="Appeler avant passage, sonner à l'interphone..."
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                className="h-8 text-xs px-2 py-0.5"
+              />
             </div>
           </div>
         </form>
