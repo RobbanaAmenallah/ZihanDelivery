@@ -1,4 +1,4 @@
-﻿import jsPDF from 'jspdf';
+import jsPDF from 'jspdf';
 import type { Parcel } from '@/types';
 
 // Status label mapping (French)
@@ -81,7 +81,6 @@ export function generateDriverPlanningPdf(allParcels: Parcel[], driverName: stri
   const boxH = 12;
   const boxY = 27;
   const boxGap = 5;
-  const totalBoxWidth = boxes.length * boxW + (boxes.length - 1) * boxGap;
   let boxX = margin;
 
   for (const box of boxes) {
