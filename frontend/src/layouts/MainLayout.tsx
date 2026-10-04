@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
+import { NotificationToast } from '@/components/notifications/NotificationToast';
 
 export const MainLayout: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
@@ -26,6 +27,9 @@ export const MainLayout: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {/* Realtime Toast with Sound */}
+      <NotificationToast />
     </div>
   );
 };

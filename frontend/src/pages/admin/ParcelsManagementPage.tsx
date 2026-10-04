@@ -20,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { SettlementBadge } from '@/components/ui/SettlementBadge';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
 import {
   type Parcel,
@@ -41,6 +42,8 @@ import {
 import { getDbUsers } from '@/services/usersDb';
 import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
+import { DateRangeFilter, applyDateFilter } from '@/components/admin/DateRangeFilter';
+import type { QuickFilter, DateRange } from '@/components/admin/DateRangeFilter';
 
 export const ParcelsManagementPage: React.FC = () => {
   const [parcels, setParcels] = useState<Parcel[]>([]);
@@ -48,6 +51,8 @@ export const ParcelsManagementPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [governorateFilter, setGovernorateFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<QuickFilter>('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' });
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Drivers & Clients
@@ -398,6 +403,27 @@ export const ParcelsManagementPage: React.FC = () => {
     showToast(`Statut mis à jour : ${newStatus}`);
   };
 
+  // ── 7b. Toggle Settlement ───────────────────────────────────────────────────
+  const handleToggleSettlement = async (parcel: Parcel) => {
+    const newSettled = !parcel.is_settled;
+    const settledAt = newSettled ? new Date().toISOString() : null;
+
+    // Optimistic UI update
+    setParcels((prev) =>
+      prev.map((p) =>
+        p.id === parcel.id ? { ...p, is_settled: newSettled, settled_at: settledAt } : p
+      )
+    );
+
+    await updateDbParcel(parcel.id, { is_settled: newSettled, settled_at: settledAt });
+
+    showToast(
+      newSettled
+        ? `✅ Colis ${parcel.tracking_number} marqué comme Réglé`
+        : `🔄 Colis ${parcel.tracking_number} marqué comme Non réglé`
+    );
+  };
+
   // ── 8. Delete Parcel ────────────────────────────────────────────────────────
   const handleDeleteParcel = async (parcelId: string, trackingNumber: string) => {
     if (window.confirm(`Supprimer définitivement le colis ${trackingNumber} ?`)) {
@@ -416,7 +442,10 @@ export const ParcelsManagementPage: React.FC = () => {
 
   // ── 8. Filtered Parcels ─────────────────────────────────────────────────────
   const filteredParcels = useMemo(() => {
-    return parcels.filter((p) => {
+    // Apply date range first
+    const dateFiltered = applyDateFilter(parcels, dateFilter, dateRange);
+
+    return dateFiltered.filter((p) => {
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !query ||
@@ -439,7 +468,7 @@ export const ParcelsManagementPage: React.FC = () => {
 
       return matchesSearch && matchesStatus && matchesGov;
     });
-  }, [parcels, searchQuery, statusFilter, governorateFilter]);
+  }, [parcels, searchQuery, statusFilter, governorateFilter, dateFilter, dateRange]);
 
   // Stats Calculations
   const stats = useMemo(() => {
@@ -559,19 +588,32 @@ export const ParcelsManagementPage: React.FC = () => {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card p-3.5 rounded-xl border border-border/80 shadow-sm">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher par N° Suivi (ZH...), Destinataire, Tél, Adresse..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-background h-9 text-sm"
+      <div className="flex flex-col gap-3 bg-card p-3.5 rounded-xl border border-border/80 shadow-sm">
+        {/* Row 1: Search + Date filter */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher par N° Suivi (ZH...), Destinataire, Tél, Adresse..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 bg-background h-9 text-sm"
+            />
+          </div>
+
+          {/* Date range filter */}
+          <DateRangeFilter
+            activeFilter={dateFilter}
+            dateRange={dateRange}
+            onChange={(filter, range) => {
+              setDateFilter(filter);
+              setDateRange(range);
+            }}
           />
         </div>
 
-        {/* Filter Controls */}
+        {/* Row 2: Status + Governorate */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Status Tabs */}
           <div className="flex items-center bg-muted/60 p-1 rounded-lg text-xs font-semibold">
@@ -654,13 +696,14 @@ export const ParcelsManagementPage: React.FC = () => {
                 <th className="py-3 px-4">Tarification (DT)</th>
                 <th className="py-3 px-4">Livreur Assigné</th>
                 <th className="py-3 px-4">Statut</th>
+                <th className="py-3 px-4">Règlement</th>
                 <th className="py-3 px-4 text-right">Bon &amp; Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {filteredParcels.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
                     <Package className="h-10 w-10 mx-auto mb-2 text-muted-foreground/40" />
                     <p className="text-sm font-semibold">Aucun colis trouvé</p>
                     <p className="text-xs">Créez votre premier colis avec le bouton ci-dessus.</p>
@@ -776,6 +819,34 @@ export const ParcelsManagementPage: React.FC = () => {
                         <div className="mt-1">
                           <StatusBadge status={parcel.status} size="sm" />
                         </div>
+                      </td>
+
+                      {/* Settlement */}
+                      <td className="py-3 px-4">
+                        {parcel.status === 'delivered' ? (
+                          <div className="space-y-1.5">
+                            <SettlementBadge
+                              isSettled={!!parcel.is_settled}
+                              settledAt={parcel.settled_at}
+                              size="sm"
+                            />
+                            <button
+                              onClick={() => handleToggleSettlement(parcel)}
+                              className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${
+                                parcel.is_settled
+                                  ? 'text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30'
+                                  : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30'
+                              }`}
+                              title={parcel.is_settled ? 'Marquer comme non réglé' : 'Marquer comme réglé'}
+                            >
+                              {parcel.is_settled ? '↩ Annuler règlement' : '✓ Marquer réglé'}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground italic">
+                            — (non livré)
+                          </span>
+                        )}
                       </td>
 
                       {/* Actions */}

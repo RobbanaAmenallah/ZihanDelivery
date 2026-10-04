@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 import { AppRouter } from '@/routes/AppRouter';
 
 const queryClient = new QueryClient({
@@ -18,10 +19,12 @@ export const App: React.FC = () => {
   return (
     <ThemeProvider defaultTheme="light" storageKey="zihan-theme">
       <AuthProvider>
-        <QueryClientProvider client={queryClient}>
-          <AppRouter />
-          <ReactQueryDevtools initialIsOpen={false} />
-        </QueryClientProvider>
+        <NotificationProvider>
+          <QueryClientProvider client={queryClient}>
+            <AppRouter />
+            <ReactQueryDevtools initialIsOpen={false} />
+          </QueryClientProvider>
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   );

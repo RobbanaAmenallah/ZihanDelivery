@@ -193,6 +193,8 @@ export async function getDbParcels(): Promise<{
             driver_id: row.driver_id,
             driver_name: row.driver_name || '',
             status: (row.status as ParcelStatus) || 'pending',
+            is_settled: Boolean(row.is_settled),
+            settled_at: row.settled_at || null,
             notes: row.notes || '',
             created_at: row.created_at || new Date().toISOString(),
             updated_at: row.updated_at,
@@ -380,6 +382,14 @@ export async function updateDbParcel(
       if (payload.driver_id !== undefined) updateData.driver_id = payload.driver_id;
       if (payload.status !== undefined) updateData.status = payload.status;
       if (payload.notes !== undefined) updateData.notes = payload.notes;
+
+      // 6. Règlement (Settlement)
+      if (payload.is_settled !== undefined) {
+        updateData.is_settled = Boolean(payload.is_settled);
+        updateData.settled_at = payload.is_settled
+          ? (payload.settled_at ?? new Date().toISOString())
+          : null;
+      }
 
       await client.from('parcels').update(updateData).eq('id', parcelId);
     } catch (err) {

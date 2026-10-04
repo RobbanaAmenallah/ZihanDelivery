@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ClientReturnRateAnalysis } from '@/components/admin/ClientReturnRateAnalysis';
+import { DateRangeFilter, applyDateFilter } from '@/components/admin/DateRangeFilter';
+import type { QuickFilter, DateRange } from '@/components/admin/DateRangeFilter';
 import { getDbParcels } from '@/services/parcelsDb';
 import type { Parcel } from '@/types';
 
@@ -33,6 +35,8 @@ function formatDay(dateStr: string): string {
 export const AdminAnalyticsPage: React.FC = () => {
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [dateFilter, setDateFilter] = useState<QuickFilter>('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' });
 
   useEffect(() => {
     const load = async () => {
@@ -44,28 +48,34 @@ export const AdminAnalyticsPage: React.FC = () => {
     load();
   }, []);
 
+  // ── Apply date filter ────────────────────────────────────────────────────
+  const filteredParcels = useMemo(
+    () => applyDateFilter(parcels, dateFilter, dateRange),
+    [parcels, dateFilter, dateRange]
+  );
+
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const total = parcels.length;
-    const delivered = parcels.filter((p) => p.status === 'delivered').length;
-    const pending = parcels.filter((p) => p.status === 'pending').length;
-    const inTransit = parcels.filter((p) =>
+    const total = filteredParcels.length;
+    const delivered = filteredParcels.filter((p) => p.status === 'delivered').length;
+    const pending = filteredParcels.filter((p) => p.status === 'pending').length;
+    const inTransit = filteredParcels.filter((p) =>
       ['accepted', 'assigned', 'picked_up', 'in_transit'].includes(p.status)
     ).length;
-    const issues = parcels.filter((p) =>
+    const issues = filteredParcels.filter((p) =>
       ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused'].includes(p.status)
     ).length;
-    const totalRevenue = parcels
+    const totalRevenue = filteredParcels
       .filter((p) => p.status === 'delivered')
       .reduce((s, p) => s + (p.delivery_fee || 0), 0);
-    const totalCOD = parcels
+    const totalCOD = filteredParcels
       .filter((p) => p.status === 'delivered')
       .reduce((s, p) => s + (p.total_amount || 0), 0);
     const deliveryRate = total > 0 ? Math.round((delivered / total) * 100) : 0;
     const returnRate = total > 0 ? Number(((issues / total) * 100).toFixed(1)) : 0;
 
     return { total, delivered, pending, inTransit, issues, totalRevenue, totalCOD, deliveryRate, returnRate };
-  }, [parcels]);
+  }, [filteredParcels]);
 
   // ── Colis par jour (7 derniers jours) ────────────────────────────────────
   const last7Days = getLast7Days();
@@ -73,16 +83,16 @@ export const AdminAnalyticsPage: React.FC = () => {
     return last7Days.map((day) => ({
       day,
       label: formatDay(day),
-      count: parcels.filter((p) => p.created_at?.startsWith(day)).length,
+      count: filteredParcels.filter((p) => p.created_at?.startsWith(day)).length,
     }));
-  }, [parcels, last7Days]);
+  }, [filteredParcels, last7Days]);
 
   const maxCount = Math.max(...colisParJour.map((d) => d.count), 1);
 
   // ── Top Livreurs ─────────────────────────────────────────────────────────
   const topDrivers = useMemo(() => {
     const map: Record<string, { total: number; delivered: number }> = {};
-    parcels.forEach((p) => {
+    filteredParcels.forEach((p) => {
       const name = p.driver_name || 'Non assigné';
       if (!map[name]) map[name] = { total: 0, delivered: 0 };
       map[name].total += 1;
@@ -97,21 +107,21 @@ export const AdminAnalyticsPage: React.FC = () => {
       }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
-  }, [parcels]);
+  }, [filteredParcels]);
 
   // ── Top Gouvernorats ──────────────────────────────────────────────────────
   const topGovs = useMemo(() => {
     const map: Record<string, number> = {};
-    parcels.forEach((p) => {
+    filteredParcels.forEach((p) => {
       const g = p.recipient_governorate || 'Inconnu';
       map[g] = (map[g] || 0) + 1;
     });
-    const total = parcels.length || 1;
+    const total = filteredParcels.length || 1;
     return Object.entries(map)
       .map(([gov, count]) => ({ gov, count, pct: Math.round((count / total) * 100) }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  }, [parcels]);
+  }, [filteredParcels]);
 
   // ── Status Distribution ───────────────────────────────────────────────────
   const statusDist = useMemo(() => {
@@ -121,13 +131,13 @@ export const AdminAnalyticsPage: React.FC = () => {
       { label: 'Livré', statuses: ['delivered'], color: 'bg-emerald-500' },
       { label: 'Retour/Echec', statuses: ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused', 'cancelled'], color: 'bg-[#EA4E52]' },
     ];
-    const total = parcels.length || 1;
+    const total = filteredParcels.length || 1;
     return groups.map((g) => ({
       ...g,
-      count: parcels.filter((p) => g.statuses.includes(p.status)).length,
-      pct: Math.round((parcels.filter((p) => g.statuses.includes(p.status)).length / total) * 100),
+      count: filteredParcels.filter((p) => g.statuses.includes(p.status)).length,
+      pct: Math.round((filteredParcels.filter((p) => g.statuses.includes(p.status)).length / total) * 100),
     }));
-  }, [parcels]);
+  }, [filteredParcels]);
 
   if (isLoading) {
     return (
@@ -140,18 +150,29 @@ export const AdminAnalyticsPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="border-b border-border/60 pb-4">
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#162033] dark:text-white">
-            Analytiques &amp; Performances
-          </h1>
-          <span className="bg-[#1B3D87]/10 text-[#1B3D87] text-xs font-bold px-2.5 py-0.5 rounded-full">
-            {parcels.length} colis analysés
-          </span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border/60 pb-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#162033] dark:text-white">
+              Analytiques &amp; Performances
+            </h1>
+            <span className="bg-[#1B3D87]/10 text-[#1B3D87] text-xs font-bold px-2.5 py-0.5 rounded-full">
+              {filteredParcels.length} colis analysés
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Vue d'ensemble des performances opérationnelles ZIHAN en temps réel.
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Vue d'ensemble des performances opérationnelles ZIHAN en temps réel.
-        </p>
+
+        <DateRangeFilter
+          activeFilter={dateFilter}
+          dateRange={dateRange}
+          onChange={(filter, range) => {
+            setDateFilter(filter);
+            setDateRange(range);
+          }}
+        />
       </div>
 
       {/* KPI Cards */}

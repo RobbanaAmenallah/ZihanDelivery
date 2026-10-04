@@ -18,6 +18,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
 import { type Parcel } from '@/types';
 import { getDbParcels, parcelToDeliveryNoteData, isParcelForClient } from '@/services/parcelsDb';
+import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROUTES } from '@/routes/paths';
@@ -39,7 +40,41 @@ export const ClientDashboardPage: React.FC = () => {
 
   useEffect(() => {
     loadParcels();
-  }, [loadParcels]);
+
+    const config = getActiveSupabaseConfig();
+    if (config.isConfigured) {
+      const client = getSupabaseClient();
+      const channel = client
+        .channel(`client_dashboard_parcels_${user?.id || 'client'}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'parcels' },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newP = payload.new as Parcel;
+              if (isParcelForClient(newP, profile, user?.id)) {
+                setParcels((prev) => [newP, ...prev.filter((p) => p.id !== newP.id)]);
+              }
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedP = payload.new as Parcel;
+              if (isParcelForClient(updatedP, profile, user?.id)) {
+                setParcels((prev) =>
+                  prev.map((p) => (p.id === updatedP.id ? { ...p, ...updatedP } : p))
+                );
+              }
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setParcels((prev) => prev.filter((p) => p.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        client.removeChannel(channel);
+      };
+    }
+  }, [loadParcels, profile, user]);
 
   const handleOpenDeliveryNote = (parcel: Parcel) => {
     setSelectedParcelForDoc(parcelToDeliveryNoteData(parcel));

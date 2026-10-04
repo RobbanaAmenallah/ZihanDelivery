@@ -8,12 +8,15 @@ import {
   Clock,
   ArrowRight,
   RefreshCw,
+  Download,
 } from 'lucide-react';
+import { generateDriverPlanningPdf } from '@/utils/generateDriverPlanningPdf';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { getDbParcels } from '@/services/parcelsDb';
+import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import type { Parcel } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROUTES } from '@/routes/paths';
@@ -23,10 +26,11 @@ export const DriverDashboardPage: React.FC = () => {
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const driverName = profile?.full_name || 'Karim Mansouri';
+
   const fetchDriverParcels = useCallback(async () => {
     setIsLoading(true);
     const { parcels: allParcels } = await getDbParcels();
-    const driverName = profile?.full_name || 'Karim Mansouri';
 
     const assigned = allParcels.filter(
       (p) =>
@@ -36,11 +40,52 @@ export const DriverDashboardPage: React.FC = () => {
 
     setParcels(assigned);
     setIsLoading(false);
-  }, [profile]);
+  }, [driverName]);
 
   useEffect(() => {
     fetchDriverParcels();
-  }, [fetchDriverParcels]);
+
+    const config = getActiveSupabaseConfig();
+    if (config.isConfigured) {
+      const client = getSupabaseClient();
+      const channel = client
+        .channel(`driver_dashboard_parcels_${driverName}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'parcels' },
+          (payload) => {
+            const isForThisDriver = (p: Parcel) =>
+              p.driver_name?.trim().toLowerCase() === driverName.trim().toLowerCase() &&
+              !['pending', 'cancelled'].includes(p.status.toLowerCase());
+
+            if (payload.eventType === 'INSERT') {
+              const newP = payload.new as Parcel;
+              if (isForThisDriver(newP)) {
+                setParcels((prev) => [newP, ...prev.filter((p) => p.id !== newP.id)]);
+              }
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedP = payload.new as Parcel;
+              if (isForThisDriver(updatedP)) {
+                setParcels((prev) => [
+                  updatedP,
+                  ...prev.filter((p) => p.id !== updatedP.id),
+                ]);
+              } else {
+                setParcels((prev) => prev.filter((p) => p.id !== updatedP.id));
+              }
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setParcels((prev) => prev.filter((p) => p.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        client.removeChannel(channel);
+      };
+    }
+  }, [fetchDriverParcels, driverName]);
 
   // Statistics calculation for the driver
   const stats = useMemo(() => {
@@ -103,6 +148,17 @@ export const DriverDashboardPage: React.FC = () => {
             leftIcon={<RefreshCw className="h-4 w-4" />}
           >
             Actualiser
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => generateDriverPlanningPdf(parcels, profile?.full_name || 'Livreur')}
+            disabled={parcels.length === 0 || isLoading}
+            leftIcon={<Download className="h-4 w-4" />}
+            className="border-[#1B3D87] text-[#1B3D87] hover:bg-[#1B3D87] hover:text-white font-bold"
+          >
+            Télécharger mon planning
           </Button>
 
           <Link to={ROUTES.DRIVER_TOUR}>

@@ -1,4 +1,4 @@
-import { getSupabaseClient, getActiveSupabaseConfig } from './supabase';
+﻿import { getSupabaseClient, getActiveSupabaseConfig } from './supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,61 +25,66 @@ export interface CreateNotificationPayload {
   meta?: Record<string, unknown>;
 }
 
-// ─── Local demo fallback ──────────────────────────────────────────────────────
+const NOTIFICATIONS_STORAGE_KEY = 'zihan_notifications';
 
-let _demoNotifications: Notification[] = [
-  {
-    id: 'notif-demo-1',
-    user_id: 'demo',
-    title: 'Bienvenue sur ZIHAN Express !',
-    body: 'Votre compte est activé et prêt à l\'emploi.',
-    type: 'success',
-    is_read: false,
-    link: undefined,
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'notif-demo-2',
-    user_id: 'demo',
-    title: 'Colis ZH000153 en transit',
-    body: 'Votre colis est en route vers Nouvelle Médina.',
-    type: 'parcel',
-    is_read: false,
-    link: '/admin/shipments',
-    meta: { tracking_number: 'ZH000153' },
-    created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-  },
-  {
-    id: 'notif-demo-3',
-    user_id: 'demo',
-    title: 'Livraison confirmée',
-    body: 'Le colis ZH000150 a été livré avec succès.',
-    type: 'success',
-    is_read: true,
-    link: '/admin/shipments',
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-];
+// ─── Local storage fallback ───────────────────────────────────────────────────
+
+function getStoredNotifications(): Notification[] {
+  try {
+    const raw = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return [
+    {
+      id: 'notif-demo-1',
+      user_id: 'all',
+      title: 'Bienvenue sur ZIHAN Express !',
+      body: 'Votre compte et système de notifications sont activés.',
+      type: 'success',
+      is_read: false,
+      created_at: new Date().toISOString(),
+    },
+  ];
+}
+
+function saveStoredNotifications(notifs: Notification[]) {
+  try {
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifs));
+  } catch {
+    // ignore
+  }
+}
 
 // ─── Fetch notifications for current user ─────────────────────────────────────
 
-export async function getNotifications(userId: string): Promise<{
+export async function getNotifications(userId: string, role?: string): Promise<{
   notifications: Notification[];
   error: string | null;
 }> {
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
 
-  if (isConfigured && userId !== 'demo') {
+  if (isConfigured && userId && userId !== 'demo') {
     try {
-      const { data, error } = await client
+      // If admin, fetch notifications for this user OR role 'admin'
+      let query = client
         .from('notifications')
         .select('*')
-        .eq('user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(30);
+        .limit(40);
+
+      if (role === 'admin') {
+        query = query.or(`user_id.eq.${userId},user_id.eq.admin`);
+      } else {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
 
       if (!error && data) {
+        saveStoredNotifications(data as Notification[]);
         return { notifications: data as Notification[], error: null };
       }
     } catch {
@@ -87,34 +92,15 @@ export async function getNotifications(userId: string): Promise<{
     }
   }
 
-  // Demo/offline fallback
+  // Local fallback
+  const stored = getStoredNotifications();
+  const filtered = stored.filter(
+    (n) => n.user_id === userId || n.user_id === 'all' || (role === 'admin' && n.user_id === 'admin')
+  );
   return {
-    notifications: _demoNotifications,
+    notifications: filtered.length ? filtered : stored,
     error: null,
   };
-}
-
-// ─── Unread count ─────────────────────────────────────────────────────────────
-
-export async function getUnreadCount(userId: string): Promise<number> {
-  const { isConfigured } = getActiveSupabaseConfig();
-  const client = getSupabaseClient();
-
-  if (isConfigured && userId !== 'demo') {
-    try {
-      const { count } = await client
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('is_read', false);
-
-      return count ?? 0;
-    } catch {
-      // fall through
-    }
-  }
-
-  return _demoNotifications.filter((n) => !n.is_read).length;
 }
 
 // ─── Mark single notification as read ─────────────────────────────────────────
@@ -123,22 +109,20 @@ export async function markAsRead(id: string, userId: string): Promise<void> {
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
 
-  if (isConfigured && userId !== 'demo') {
+  if (isConfigured && userId && userId !== 'demo') {
     try {
       await client
         .from('notifications')
         .update({ is_read: true })
-        .eq('id', id)
-        .eq('user_id', userId);
-      return;
+        .eq('id', id);
     } catch {
       // fall through
     }
   }
 
-  // Demo update
-  _demoNotifications = _demoNotifications.map((n) =>
-    n.id === id ? { ...n, is_read: true } : n
+  const stored = getStoredNotifications();
+  saveStoredNotifications(
+    stored.map((n) => (n.id === id ? { ...n, is_read: true } : n))
   );
 }
 
@@ -148,23 +132,22 @@ export async function markAllAsRead(userId: string): Promise<void> {
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
 
-  if (isConfigured && userId !== 'demo') {
+  if (isConfigured && userId && userId !== 'demo') {
     try {
       await client
         .from('notifications')
         .update({ is_read: true })
-        .eq('user_id', userId)
-        .eq('is_read', false);
-      return;
+        .or(`user_id.eq.${userId},user_id.eq.admin`);
     } catch {
       // fall through
     }
   }
 
-  _demoNotifications = _demoNotifications.map((n) => ({ ...n, is_read: true }));
+  const stored = getStoredNotifications();
+  saveStoredNotifications(stored.map((n) => ({ ...n, is_read: true })));
 }
 
-// ─── Create a new notification (admin / system) ───────────────────────────────
+// ─── Create a new notification (broadcast / single) ───────────────────────────
 
 export async function createNotification(
   payload: CreateNotificationPayload
@@ -173,7 +156,7 @@ export async function createNotification(
   const client = getSupabaseClient();
 
   const newNotif: Notification = {
-    id: `notif-${Date.now()}`,
+    id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     user_id: payload.user_id,
     title: payload.title,
     body: payload.body,
@@ -202,42 +185,57 @@ export async function createNotification(
       if (!error && data) {
         return { notification: data as Notification, error: null };
       }
-      return { notification: null, error: error?.message ?? 'Erreur inconnue' };
     } catch (e) {
-      return { notification: null, error: String(e) };
+      console.warn('Could not insert notification in Supabase:', e);
     }
   }
 
-  // Demo fallback
-  _demoNotifications = [newNotif, ..._demoNotifications];
+  // Local fallback
+  const stored = getStoredNotifications();
+  saveStoredNotifications([newNotif, ...stored]);
   return { notification: newNotif, error: null };
 }
 
-// ─── Subscribe to realtime changes ───────────────────────────────────────────
+// ─── Subscribe to realtime changes with Sound & Toasts ────────────────────────
 
 export function subscribeToNotifications(
   userId: string,
+  role: string | undefined,
   onNew: (notif: Notification) => void
 ): (() => void) | null {
   const { isConfigured } = getActiveSupabaseConfig();
   if (!isConfigured || !userId || userId === 'demo') return null;
 
   const client = getSupabaseClient();
+  const channelId = `notifications_channel_${userId}_${Date.now()}`;
+
   const channel = client
-    .channel(`notifications:user:${userId}`)
+    .channel(channelId)
     .on(
       'postgres_changes',
       {
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
-        filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        onNew(payload.new as Notification);
+        const newNotif = payload.new as Notification;
+        // Check if this notification belongs to this user or is for admins
+        const isForMe =
+          newNotif.user_id === userId ||
+          newNotif.user_id === 'all' ||
+          (role === 'admin' && newNotif.user_id === 'admin');
+
+        if (isForMe) {
+          onNew(newNotif);
+        }
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log(`[Realtime] Notifications connected for ${userId}`);
+      }
+    });
 
   return () => {
     client.removeChannel(channel);

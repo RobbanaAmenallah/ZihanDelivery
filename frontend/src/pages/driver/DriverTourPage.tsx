@@ -11,7 +11,9 @@ import {
   Search,
   Package,
   RefreshCw,
+  Download,
 } from 'lucide-react';
+import { generateDriverPlanningPdf } from '@/utils/generateDriverPlanningPdf';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,6 +21,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Modal } from '@/components/ui/modal';
 import { ParcelStatus } from '@/lib/statusConfig';
 import { getDbParcels, updateDbParcel } from '@/services/parcelsDb';
+import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import type { Parcel } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -33,10 +36,11 @@ export const DriverTourPage: React.FC = () => {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState<boolean>(false);
   const [statusNote, setStatusNote] = useState<string>('');
 
+  const driverName = profile?.full_name || 'Karim Mansouri';
+
   const fetchDriverParcels = useCallback(async () => {
     setIsLoading(true);
     const { parcels: allParcels } = await getDbParcels();
-    const driverName = profile?.full_name || 'Karim Mansouri';
 
     const assigned = allParcels.filter(
       (p) =>
@@ -46,11 +50,52 @@ export const DriverTourPage: React.FC = () => {
 
     setParcels(assigned);
     setIsLoading(false);
-  }, [profile]);
+  }, [driverName]);
 
   useEffect(() => {
     fetchDriverParcels();
-  }, [fetchDriverParcels]);
+
+    const config = getActiveSupabaseConfig();
+    if (config.isConfigured) {
+      const client = getSupabaseClient();
+      const channel = client
+        .channel(`driver_tour_parcels_${driverName}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'parcels' },
+          (payload) => {
+            const isForThisDriver = (p: Parcel) =>
+              p.driver_name?.trim().toLowerCase() === driverName.trim().toLowerCase() &&
+              !['pending', 'cancelled'].includes(p.status.toLowerCase());
+
+            if (payload.eventType === 'INSERT') {
+              const newP = payload.new as Parcel;
+              if (isForThisDriver(newP)) {
+                setParcels((prev) => [newP, ...prev.filter((p) => p.id !== newP.id)]);
+              }
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedP = payload.new as Parcel;
+              if (isForThisDriver(updatedP)) {
+                setParcels((prev) => [
+                  updatedP,
+                  ...prev.filter((p) => p.id !== updatedP.id),
+                ]);
+              } else {
+                setParcels((prev) => prev.filter((p) => p.id !== updatedP.id));
+              }
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setParcels((prev) => prev.filter((p) => p.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        client.removeChannel(channel);
+      };
+    }
+  }, [fetchDriverParcels, driverName]);
 
   const handleOpenStatusModal = (parcel: Parcel) => {
     setSelectedParcel(parcel);
@@ -116,6 +161,7 @@ export const DriverTourPage: React.FC = () => {
             <Truck className="h-5 w-5 text-amber-300" />
             <h2 className="text-base font-black tracking-tight">Ma Tournée Active</h2>
           </div>
+        <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -125,6 +171,17 @@ export const DriverTourPage: React.FC = () => {
           >
             Actualiser
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => generateDriverPlanningPdf(parcels, profile?.full_name || 'Livreur')}
+            disabled={parcels.length === 0}
+            className="h-7 text-xs text-amber-300 hover:text-white hover:bg-white/10 font-bold"
+            leftIcon={<Download className="h-3.5 w-3.5" />}
+          >
+            Mon planning
+          </Button>
+        </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/20 text-xs">

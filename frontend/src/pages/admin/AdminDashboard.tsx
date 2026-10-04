@@ -20,15 +20,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { SettlementBadge } from '@/components/ui/SettlementBadge';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
 import { ClientReturnRateAnalysis } from '@/components/admin/ClientReturnRateAnalysis';
+import { DateRangeFilter, applyDateFilter } from '@/components/admin/DateRangeFilter';
+import type { QuickFilter, DateRange } from '@/components/admin/DateRangeFilter';
 import { ROUTES } from '@/routes/paths';
 import { getDbParcels, parcelToDeliveryNoteData } from '@/services/parcelsDb';
+import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import type { Parcel } from '@/types';
 import type { DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
 
 export const AdminDashboard: React.FC = () => {
-  const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d' | 'all'>('7d');
+  const [timeFilter, setTimeFilter] = useState<QuickFilter>('7d');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' });
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
@@ -43,22 +48,42 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     loadParcels();
+
+    const config = getActiveSupabaseConfig();
+    if (config.isConfigured) {
+      const client = getSupabaseClient();
+      const channel = client
+        .channel('admin_dashboard_realtime_parcels')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'parcels' },
+          (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const newP = payload.new as Parcel;
+              setParcels((prev) => [newP, ...prev.filter((p) => p.id !== newP.id)]);
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedP = payload.new as Parcel;
+              setParcels((prev) =>
+                prev.map((p) => (p.id === updatedP.id ? { ...p, ...updatedP } : p))
+              );
+            } else if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old.id;
+              setParcels((prev) => prev.filter((p) => p.id !== deletedId));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        client.removeChannel(channel);
+      };
+    }
   }, []);
 
-  // Filter parcels according to timeFilter
+  // Filter parcels according to timeFilter / custom date range
   const filteredParcels = useMemo(() => {
-    if (timeFilter === 'all') return parcels;
-
-    const now = Date.now();
-    let msRange = 7 * 86400000;
-    if (timeFilter === 'today') msRange = 86400000;
-    if (timeFilter === '30d') msRange = 30 * 86400000;
-
-    return parcels.filter((p) => {
-      const pTime = new Date(p.created_at).getTime();
-      return now - pTime <= msRange;
-    });
-  }, [parcels, timeFilter]);
+    return applyDateFilter(parcels, timeFilter, dateRange);
+  }, [parcels, timeFilter, dateRange]);
 
   // Statistics calculation
   const stats = useMemo(() => {
@@ -161,24 +186,14 @@ export const AdminDashboard: React.FC = () => {
 
         {/* Time Filters & Actions */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center bg-muted/60 p-1 rounded-lg text-xs font-semibold">
-            {(['today', '7d', '30d', 'all'] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setTimeFilter(filter)}
-                className={`px-3 py-1 rounded-md transition-all ${
-                  timeFilter === filter
-                    ? 'bg-background shadow-xs text-foreground font-bold'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {filter === 'today' && "Aujourd'hui"}
-                {filter === '7d' && '7 Jours'}
-                {filter === '30d' && '30 Jours'}
-                {filter === 'all' && 'Tout'}
-              </button>
-            ))}
-          </div>
+          <DateRangeFilter
+            activeFilter={timeFilter}
+            dateRange={dateRange}
+            onChange={(filter, range) => {
+              setTimeFilter(filter);
+              setDateRange(range);
+            }}
+          />
 
           <Button
             variant="outline"
@@ -313,6 +328,7 @@ export const AdminDashboard: React.FC = () => {
                       <th className="p-3">Destinataire</th>
                       <th className="p-3">Livreur</th>
                       <th className="p-3">Statut</th>
+                      <th className="p-3">Règlement</th>
                       <th className="p-3 text-right">COD</th>
                       <th className="p-3 text-right">Action</th>
                     </tr>
@@ -339,6 +355,17 @@ export const AdminDashboard: React.FC = () => {
                         </td>
                         <td className="p-3">
                           <StatusBadge status={parcel.status} size="sm" />
+                        </td>
+                        <td className="p-3">
+                          {parcel.status === 'delivered' ? (
+                            <SettlementBadge
+                              isSettled={!!parcel.is_settled}
+                              settledAt={parcel.settled_at}
+                              size="sm"
+                            />
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
                         </td>
                         <td className="p-3 text-right font-mono font-bold text-foreground">
                           {parcel.total_amount.toFixed(3)} DT

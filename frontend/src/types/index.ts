@@ -117,6 +117,10 @@ export interface Parcel {
   driver_id?: string | null;
   driver_name?: string;
   status: ParcelStatus;
+  /** true = l'argent a été remis au client (expéditeur) */
+  is_settled?: boolean;
+  /** date/heure du règlement */
+  settled_at?: string | null;
   notes?: string;
   created_at: string;
   updated_at?: string;
@@ -167,5 +171,7 @@ export interface UpdateParcelPayload {
   driver_name?: string;
   driver_id?: string | null;
   status?: ParcelStatus;
+  is_settled?: boolean;
+  settled_at?: string | null;
   notes?: string;
 }

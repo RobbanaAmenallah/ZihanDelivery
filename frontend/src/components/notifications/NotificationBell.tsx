@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -9,16 +9,10 @@ import {
   Info,
   XCircle,
   X,
+  Volume2,
 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-  getNotifications,
-  markAsRead,
-  markAllAsRead,
-  subscribeToNotifications,
-  type Notification,
-  type NotificationType,
-} from '@/services/notificationsDb';
+import { useNotifications } from '@/contexts/NotificationContext';
+import { type Notification, type NotificationType } from '@/services/notificationsDb';
 import { cn } from '@/lib/utils';
 
 // ─── Icon per notification type ───────────────────────────────────────────────
@@ -45,40 +39,19 @@ function timeAgo(dateStr: string): string {
   return `Il y a ${days} jour${days > 1 ? 's' : ''}`;
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 export const NotificationBell: React.FC = () => {
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    markAsRead,
+    markAllAsRead,
+    triggerSoundTest,
+  } = useNotifications();
+
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const userId = user?.id ?? 'demo';
-
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
-
-  // Load notifications
-  const loadNotifications = useCallback(async () => {
-    setIsLoading(true);
-    const { notifications: fetched } = await getNotifications(userId);
-    setNotifications(fetched);
-    setIsLoading(false);
-  }, [userId]);
-
-  useEffect(() => {
-    loadNotifications();
-
-    // Realtime subscription
-    const unsub = subscribeToNotifications(userId, (newNotif) => {
-      setNotifications((prev) => [newNotif, ...prev]);
-    });
-
-    return () => {
-      if (unsub) unsub();
-    };
-  }, [userId, loadNotifications]);
 
   // Close on outside click
   useEffect(() => {
@@ -91,22 +64,12 @@ export const NotificationBell: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen]);
 
-  const handleMarkRead = async (notif: Notification) => {
-    if (!notif.is_read) {
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
-      );
-      await markAsRead(notif.id, userId);
-    }
+  const handleNotificationClick = async (notif: Notification) => {
+    await markAsRead(notif.id);
     if (notif.link) {
       setIsOpen(false);
       navigate(notif.link);
     }
-  };
-
-  const handleMarkAllRead = async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    await markAllAsRead(userId);
   };
 
   return (
@@ -115,11 +78,11 @@ export const NotificationBell: React.FC = () => {
       <button
         onClick={() => setIsOpen((o) => !o)}
         className="relative flex h-9 w-9 items-center justify-center rounded-lg text-foreground hover:bg-muted transition-colors"
-        title="Notifications"
+        title="Notifications en direct (avec son)"
       >
         <Bell className="h-4.5 w-4.5 h-[18px] w-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#EA4E52] text-[9px] font-black text-white ring-2 ring-background px-0.5">
+          <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#EA4E52] text-[9px] font-black text-white ring-2 ring-background px-0.5 animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -127,22 +90,31 @@ export const NotificationBell: React.FC = () => {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-[360px] max-w-[calc(100vw-16px)] rounded-xl border border-border bg-card shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2 duration-150">
+        <div className="absolute right-0 top-full mt-2 w-[380px] max-w-[calc(100vw-16px)] rounded-xl border border-border bg-card shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2 duration-150">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-muted/30">
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4 text-[#1B3D87]" />
-              <h3 className="text-sm font-black text-foreground">Notifications</h3>
+              <h3 className="text-sm font-black text-foreground">Notifications Live</h3>
               {unreadCount > 0 && (
                 <span className="bg-[#EA4E52] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  {unreadCount} nouvelles
+                  {unreadCount} new
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={triggerSoundTest}
+                className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-[#1B3D87] p-1 rounded hover:bg-muted transition-colors"
+                title="Tester le son de notification"
+              >
+                <Volume2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline text-[10px]">Test Son</span>
+              </button>
+
               {unreadCount > 0 && (
                 <button
-                  onClick={handleMarkAllRead}
+                  onClick={markAllAsRead}
                   className="flex items-center gap-1 text-[11px] font-semibold text-[#1B3D87] hover:underline"
                   title="Tout marquer comme lu"
                 >
@@ -150,9 +122,10 @@ export const NotificationBell: React.FC = () => {
                   Tout lire
                 </button>
               )}
+
               <button
                 onClick={() => setIsOpen(false)}
-                className="ml-2 text-muted-foreground hover:text-foreground p-0.5 rounded"
+                className="ml-1 text-muted-foreground hover:text-foreground p-0.5 rounded"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -163,13 +136,13 @@ export const NotificationBell: React.FC = () => {
           <div className="max-h-[400px] overflow-y-auto divide-y divide-border/40">
             {isLoading ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
-                Chargement...
+                Chargement des notifications...
               </div>
             ) : notifications.length === 0 ? (
               <div className="py-10 text-center">
                 <Bell className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
                 <p className="text-sm font-semibold text-muted-foreground">Aucune notification</p>
-                <p className="text-xs text-muted-foreground">Vous êtes à jour !</p>
+                <p className="text-xs text-muted-foreground">Toutes les notifications en temps réel apparaîtront ici.</p>
               </div>
             ) : (
               notifications.map((notif) => {
@@ -178,10 +151,10 @@ export const NotificationBell: React.FC = () => {
                 return (
                   <button
                     key={notif.id}
-                    onClick={() => handleMarkRead(notif)}
+                    onClick={() => handleNotificationClick(notif)}
                     className={cn(
                       'w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-muted/50 transition-colors',
-                      !notif.is_read && 'bg-blue-50/40 dark:bg-blue-950/10'
+                      !notif.is_read && 'bg-blue-50/40 dark:bg-blue-950/20'
                     )}
                   >
                     {/* Icon */}
@@ -191,7 +164,7 @@ export const NotificationBell: React.FC = () => {
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <p className={cn('text-xs font-bold leading-snug', !notif.is_read ? 'text-foreground' : 'text-muted-foreground')}>
+                      <p className={cn('text-xs font-bold leading-snug', !notif.is_read ? 'text-[#1B3D87] dark:text-blue-300' : 'text-foreground')}>
                         {notif.title}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
@@ -204,7 +177,7 @@ export const NotificationBell: React.FC = () => {
 
                     {/* Unread dot */}
                     {!notif.is_read && (
-                      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1B3D87]" />
+                      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#EA4E52]" />
                     )}
                   </button>
                 );
@@ -214,10 +187,14 @@ export const NotificationBell: React.FC = () => {
 
           {/* Footer */}
           {notifications.length > 0 && (
-            <div className="px-4 py-2.5 border-t border-border/60 bg-muted/20">
-              <p className="text-center text-[11px] text-muted-foreground">
+            <div className="px-4 py-2.5 border-t border-border/60 bg-muted/20 flex items-center justify-between">
+              <p className="text-[11px] text-muted-foreground font-medium">
                 {notifications.length} notification{notifications.length > 1 ? 's' : ''} au total
               </p>
+              <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                Live Realtime Actif
+              </span>
             </div>
           )}
         </div>
