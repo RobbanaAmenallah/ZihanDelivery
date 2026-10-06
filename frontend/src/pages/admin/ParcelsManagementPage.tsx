@@ -14,6 +14,7 @@ import {
   Loader2,
   Pencil,
   ShieldCheck,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -440,6 +441,49 @@ export const ParcelsManagementPage: React.FC = () => {
     setIsDocModalOpen(true);
   };
 
+  // ── Export CSV Colis ─────────────────────────────────────────────────────────
+  const handleExportParcelsCSV = () => {
+    const headers = [
+      'N° Suivi', 'Date Création', 'Expéditeur', 'Tél Expéditeur',
+      'Destinataire', 'Tél Destinataire', 'Gouvernorat', 'Délégation', 'Adresse',
+      'Description', 'Qté', 'Poids (kg)', 'Valeur Marchandise (DT)',
+      'Frais Port (DT)', 'Total COD (DT)', 'Livreur', 'Statut', 'Règlement', 'Date Règlement',
+    ];
+    const rows = filteredParcels.map((p) => [
+      `"${p.tracking_number}"`,
+      `"${new Date(p.created_at).toLocaleDateString('fr-FR')}"`,
+      `"${p.sender_name}"`,
+      `"${p.sender_phone}"`,
+      `"${p.recipient_name}"`,
+      `"${p.recipient_phone}"`,
+      `"${p.recipient_governorate}"`,
+      `"${p.recipient_delegation || ''}"`,
+      `"${p.recipient_address}"`,
+      `"${p.description}"`,
+      p.quantity,
+      p.weight,
+      p.goods_amount.toFixed(3),
+      p.delivery_fee.toFixed(3),
+      p.total_amount.toFixed(3),
+      `"${p.driver_name || ''}"`,
+      `"${p.status}"`,
+      `"${p.is_settled ? 'Réglé' : 'Non réglé'}"`,
+      `"${p.settled_at ? new Date(p.settled_at).toLocaleDateString('fr-FR') : ''}"`,
+    ]);
+
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `colis_zihan_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('📥 Export CSV des colis réalisé avec succès !');
+  };
+
   // ── 8. Filtered Parcels ─────────────────────────────────────────────────────
   const filteredParcels = useMemo(() => {
     // Apply date range first
@@ -520,6 +564,16 @@ export const ParcelsManagementPage: React.FC = () => {
             leftIcon={<RefreshCw className="h-4 w-4" />}
           >
             Actualiser
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportParcelsCSV}
+            leftIcon={<Download className="h-4 w-4" />}
+            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
+          >
+            Exporter CSV
           </Button>
 
           <Button

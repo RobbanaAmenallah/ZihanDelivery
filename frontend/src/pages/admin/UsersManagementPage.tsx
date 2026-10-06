@@ -28,6 +28,8 @@ import {
   Link as LinkIcon,
   KeyRound,
 } from 'lucide-react';
+import { DateRangeFilter, applyDateFilter } from '@/components/admin/DateRangeFilter';
+import type { QuickFilter, DateRange } from '@/components/admin/DateRangeFilter';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -115,6 +117,8 @@ export const UsersManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'drivers' | 'clients' | 'admins'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [dateFilter, setDateFilter] = useState<QuickFilter>('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' });
 
   // Database Connection Status State
   const [dbStatus, setDbStatus] = useState<DbStatus>(() => {
@@ -418,23 +422,26 @@ export const UsersManagementPage: React.FC = () => {
 
   // ── EXPORT CSV ──────────────────────────────────────────────────────────────
   const handleExportCSV = () => {
-    const headers = ['Nom Complet', 'Email', 'Téléphone', 'Rôle', 'Zone', 'Véhicule / Entreprise', 'Statut'];
+    const headers = ['Nom Complet', 'Email', 'Téléphone', 'Rôle', 'Entreprise / Raison Sociale', 'Zone / Secteur', 'Véhicule', 'Statut', 'Date Création'];
     const rows = filteredUsers.map((u) => [
       `"${u.full_name}"`,
       `"${u.email ?? ''}"`,
       `"${u.phone}"`,
-      `"${u.role}"`,
+      `"${u.role === 'admin' ? 'Administrateur' : u.role === 'driver' ? 'Livreur' : 'Client'}"`,
+      `"${u.company_name || ''}"`,
       `"${u.zone || ''}"`,
-      `"${u.vehicle || u.company_name || ''}"`,
+      `"${u.vehicle || ''}"`,
       `"${u.is_active ? 'Actif' : 'Inactif'}"`,
+      `"${u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : ''}"`,
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `utilisateurs_zihan_db_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `clients_zihan_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -443,8 +450,10 @@ export const UsersManagementPage: React.FC = () => {
 
   // ── FILTERED USERS COMPUTATION ──────────────────────────────────────────────
   const filteredUsers = useMemo(() => {
+    // Apply date filter first
+    const dateFiltered = applyDateFilter(users, dateFilter, dateRange);
     const q = searchQuery.toLowerCase().trim();
-    return users.filter((u) => {
+    return dateFiltered.filter((u) => {
       // Tab filter
       if (activeTab === 'drivers' && u.role !== 'driver') return false;
       if (activeTab === 'clients' && u.role !== 'client') return false;
@@ -465,7 +474,8 @@ export const UsersManagementPage: React.FC = () => {
       }
       return true;
     });
-  }, [users, activeTab, statusFilter, searchQuery]);
+  }, [users, activeTab, statusFilter, searchQuery, dateFilter, dateRange]);
+
 
   // Statistics
   const stats = useMemo(() => {
@@ -693,7 +703,7 @@ export const UsersManagementPage: React.FC = () => {
         </div>
 
         {/* Search & Status select */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -714,6 +724,15 @@ export const UsersManagementPage: React.FC = () => {
               { value: 'active', label: 'Actifs' },
               { value: 'inactive', label: 'Inactifs' },
             ]}
+          />
+
+          <DateRangeFilter
+            activeFilter={dateFilter}
+            dateRange={dateRange}
+            onChange={(filter, range) => {
+              setDateFilter(filter);
+              setDateRange(range);
+            }}
           />
         </div>
       </div>
