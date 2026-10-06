@@ -7,17 +7,24 @@ import {
   RefreshCw,
   FileText,
   Printer,
+  Download,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { SettlementBadge } from '@/components/ui/SettlementBadge';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
+import { DateRangeFilter, applyDateFilter } from '@/components/admin/DateRangeFilter';
+import type { QuickFilter, DateRange } from '@/components/admin/DateRangeFilter';
 import { type Parcel } from '@/types';
 import { getDbParcels, parcelToDeliveryNoteData, isParcelForClient } from '@/services/parcelsDb';
 import { type DeliveryNoteData } from '@/components/documents/ZihanDeliveryNoteTemplate';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROUTES } from '@/routes/paths';
+
+const RETURN_STATUSES = ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused'];
 
 export const ClientShipmentsPage: React.FC = () => {
   const { profile, user } = useAuth();
@@ -25,6 +32,8 @@ export const ClientShipmentsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<QuickFilter>('all');
+  const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' });
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
   const [selectedParcelForDoc, setSelectedParcelForDoc] = useState<DeliveryNoteData | null>(null);
 
@@ -45,8 +54,48 @@ export const ClientShipmentsPage: React.FC = () => {
     setIsDocModalOpen(true);
   };
 
+  // ── Export CSV Client ─────────────────────────────────────────────────────────
+  const handleExportCSV = () => {
+    const headers = [
+      'N° Suivi', 'Date', 'Destinataire', 'Téléphone',
+      'Gouvernorat', 'Délégation', 'Adresse', 'Contenu',
+      'Qté', 'Valeur Marchandise (DT)', 'Total COD (DT)',
+      'Statut', 'Règlement',
+    ];
+    const rows = filteredParcels.map((p) => [
+      `"${p.tracking_number}"`,
+      `"${new Date(p.created_at).toLocaleDateString('fr-FR')}"`,
+      `"${p.recipient_name}"`,
+      `"${p.recipient_phone}"`,
+      `"${p.recipient_governorate}"`,
+      `"${p.recipient_delegation || ''}"`,
+      `"${p.recipient_address}"`,
+      `"${p.description}"`,
+      p.quantity,
+      (p.goods_amount || 0).toFixed(3),
+      p.total_amount.toFixed(3),
+      `"${p.status}"`,
+      `"${p.is_settled ? 'Réglé' : 'Non réglé'}"`,
+    ]);
+
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `mes_colis_zihan_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // ── Filtered Parcels ──────────────────────────────────────────────────────────
   const filteredParcels = useMemo(() => {
-    return parcels.filter((p) => {
+    // Apply date filter first
+    const dateFiltered = applyDateFilter(parcels, dateFilter, dateRange);
+
+    return dateFiltered.filter((p) => {
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -61,11 +110,20 @@ export const ClientShipmentsPage: React.FC = () => {
         (statusFilter === 'pending' && p.status === 'pending') ||
         (statusFilter === 'in_transit' && ['accepted', 'assigned', 'picked_up', 'in_transit'].includes(p.status)) ||
         (statusFilter === 'delivered' && p.status === 'delivered') ||
-        (statusFilter === 'issues' && ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused'].includes(p.status));
+        (statusFilter === 'returns' && RETURN_STATUSES.includes(p.status));
 
       return matchSearch && matchStatus;
     });
-  }, [parcels, searchQuery, statusFilter]);
+  }, [parcels, searchQuery, statusFilter, dateFilter, dateRange]);
+
+  // Count by status
+  const counts = useMemo(() => ({
+    all: parcels.length,
+    pending: parcels.filter((p) => p.status === 'pending').length,
+    inTransit: parcels.filter((p) => ['accepted', 'assigned', 'picked_up', 'in_transit'].includes(p.status)).length,
+    delivered: parcels.filter((p) => p.status === 'delivered').length,
+    returns: parcels.filter((p) => RETURN_STATUSES.includes(p.status)).length,
+  }), [parcels]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -85,7 +143,7 @@ export const ClientShipmentsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
@@ -95,6 +153,18 @@ export const ClientShipmentsPage: React.FC = () => {
           >
             Actualiser
           </Button>
+
+          {filteredParcels.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCSV}
+              leftIcon={<Download className="h-4 w-4" />}
+              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
+            >
+              Exporter CSV
+            </Button>
+          )}
 
           {parcels.length > 0 && (
             <Button
@@ -122,25 +192,39 @@ export const ClientShipmentsPage: React.FC = () => {
       {/* Main Table Card */}
       <Card className="border-border/80 shadow-sm overflow-hidden">
         {/* Search & Filter Bar */}
-        <div className="p-4 bg-card border-b border-border/60 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher par N° Suivi (ZH...), Destinataire, Tél, Ville..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 text-xs"
+        <div className="p-4 bg-card border-b border-border/60 flex flex-col gap-3">
+          {/* Row 1: Search + Date filter */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher par N° Suivi (ZH...), Destinataire, Tél, Ville..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9 text-xs"
+              />
+            </div>
+
+            {/* Date range filter */}
+            <DateRangeFilter
+              activeFilter={dateFilter}
+              dateRange={dateRange}
+              onChange={(filter, range) => {
+                setDateFilter(filter);
+                setDateRange(range);
+              }}
             />
           </div>
 
-          <div className="flex items-center bg-muted/60 p-1 rounded-lg text-xs font-semibold shrink-0">
+          {/* Row 2: Status tabs */}
+          <div className="flex items-center bg-muted/60 p-1 rounded-lg text-xs font-semibold self-start">
             <button
               onClick={() => setStatusFilter('all')}
               className={`px-3 py-1 rounded-md transition-all ${
                 statusFilter === 'all' ? 'bg-background shadow-xs text-foreground font-bold' : 'text-muted-foreground'
               }`}
             >
-              Tous ({parcels.length})
+              Tous ({counts.all})
             </button>
             <button
               onClick={() => setStatusFilter('pending')}
@@ -148,7 +232,7 @@ export const ClientShipmentsPage: React.FC = () => {
                 statusFilter === 'pending' ? 'bg-background shadow-xs text-foreground font-bold' : 'text-muted-foreground'
               }`}
             >
-              En attente
+              En attente ({counts.pending})
             </button>
             <button
               onClick={() => setStatusFilter('in_transit')}
@@ -156,7 +240,7 @@ export const ClientShipmentsPage: React.FC = () => {
                 statusFilter === 'in_transit' ? 'bg-background shadow-xs text-foreground font-bold' : 'text-muted-foreground'
               }`}
             >
-              En cours
+              En cours ({counts.inTransit})
             </button>
             <button
               onClick={() => setStatusFilter('delivered')}
@@ -164,7 +248,18 @@ export const ClientShipmentsPage: React.FC = () => {
                 statusFilter === 'delivered' ? 'bg-background shadow-xs text-foreground font-bold' : 'text-muted-foreground'
               }`}
             >
-              Livrés
+              Livrés ({counts.delivered})
+            </button>
+            <button
+              onClick={() => setStatusFilter('returns')}
+              className={`flex items-center gap-1 px-3 py-1 rounded-md transition-all ${
+                statusFilter === 'returns'
+                  ? 'bg-rose-100 text-rose-700 font-bold shadow-xs dark:bg-rose-950/60 dark:text-rose-300'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              <RotateCcw className="h-3 w-3" />
+              Retours ({counts.returns})
             </button>
           </div>
         </div>
@@ -180,6 +275,7 @@ export const ClientShipmentsPage: React.FC = () => {
                   <th className="p-3">Gouvernorat &amp; Ville</th>
                   <th className="p-3">Contenu</th>
                   <th className="p-3">Statut</th>
+                  <th className="p-3">Règlement</th>
                   <th className="p-3 text-right">Valeur Marchandise</th>
                   <th className="p-3 text-right">À Encaisser (COD)</th>
                   <th className="p-3 text-right">Bon de Commande</th>
@@ -188,7 +284,7 @@ export const ClientShipmentsPage: React.FC = () => {
               <tbody className="divide-y divide-border">
                 {filteredParcels.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                    <td colSpan={9} className="py-12 text-center text-muted-foreground">
                       <Package className="h-10 w-10 mx-auto mb-2 opacity-30 text-[#1B3D87]" />
                       <p className="font-bold text-foreground">Aucun colis trouvé</p>
                       <p className="text-xs mt-1">Créez votre première expédition avec le bouton ci-dessus.</p>
@@ -196,7 +292,12 @@ export const ClientShipmentsPage: React.FC = () => {
                   </tr>
                 ) : (
                   filteredParcels.map((parcel) => (
-                    <tr key={parcel.id} className="hover:bg-[#F7F9FC] dark:hover:bg-slate-800/40 transition-colors">
+                    <tr
+                      key={parcel.id}
+                      className={`hover:bg-[#F7F9FC] dark:hover:bg-slate-800/40 transition-colors ${
+                        RETURN_STATUSES.includes(parcel.status) ? 'bg-rose-50/30 dark:bg-rose-950/10' : ''
+                      }`}
+                    >
                       <td className="p-3 px-4 font-mono font-black text-[#1B3D87] dark:text-blue-400">
                         {parcel.tracking_number}
                         <span className="block text-[10px] font-sans font-normal text-muted-foreground">
@@ -218,6 +319,17 @@ export const ClientShipmentsPage: React.FC = () => {
                       </td>
                       <td className="p-3">
                         <StatusBadge status={parcel.status} size="sm" />
+                      </td>
+                      <td className="p-3">
+                        {parcel.status === 'delivered' ? (
+                          <SettlementBadge
+                            isSettled={!!parcel.is_settled}
+                            settledAt={parcel.settled_at}
+                            size="sm"
+                          />
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground italic">—</span>
+                        )}
                       </td>
                       <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                         {(parcel.goods_amount || 0).toFixed(3)} DT
