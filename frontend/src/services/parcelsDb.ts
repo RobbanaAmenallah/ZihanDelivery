@@ -380,8 +380,36 @@ export async function updateDbParcel(
       // 5. Livreur & Statut (Driver & Status)
       if (payload.driver_name !== undefined) updateData.driver_name = payload.driver_name;
       if (payload.driver_id !== undefined) updateData.driver_id = payload.driver_id;
-      if (payload.status !== undefined) updateData.status = payload.status;
       if (payload.notes !== undefined) updateData.notes = payload.notes;
+
+      if (payload.status !== undefined) {
+        updateData.status = payload.status;
+
+        const now = new Date().toISOString();
+
+        // accepted_at : rempli automatiquement quand le colis passe en "accepted" ou "assigned"
+        // On ne l'écrase pas s'il existe déjà (première acceptation uniquement)
+        if (payload.status === 'accepted' || payload.status === 'assigned') {
+          // On lit le colis actuel dans le cache local pour vérifier s'il a déjà un accepted_at
+          const cached = getLocalCache().find((p) => p.id === parcelId);
+          if (!cached?.accepted_at) {
+            updateData.accepted_at = payload.accepted_at ?? now;
+          }
+        }
+
+        // status_updated_at : mis à jour à chaque changement de statut (sauf retour en pending)
+        if (payload.status !== 'pending') {
+          updateData.status_updated_at = payload.status_updated_at ?? now;
+        }
+      }
+
+      // Gestion manuelle si fourni explicitement (admin corrige une date)
+      if (payload.accepted_at !== undefined && updateData.accepted_at === undefined) {
+        updateData.accepted_at = payload.accepted_at;
+      }
+      if (payload.status_updated_at !== undefined && updateData.status_updated_at === undefined) {
+        updateData.status_updated_at = payload.status_updated_at;
+      }
 
       // 6. Règlement (Settlement)
       if (payload.is_settled !== undefined) {
@@ -410,9 +438,19 @@ export async function updateDbParcel(
           ? gAmount + dFee
           : p.total_amount;
 
+      // Merge les timestamps calculés (accepted_at, status_updated_at) depuis updateData
+      const extraTimestamps: Partial<typeof p> = {};
+      if ('accepted_at' in updateData) {
+        extraTimestamps.accepted_at = updateData.accepted_at as string | null;
+      }
+      if ('status_updated_at' in updateData) {
+        extraTimestamps.status_updated_at = updateData.status_updated_at as string | null;
+      }
+
       return {
         ...p,
         ...payload,
+        ...extraTimestamps,
         goods_amount: gAmount,
         delivery_fee: dFee,
         total_amount: tAmount,

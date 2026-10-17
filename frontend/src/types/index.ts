@@ -1,4 +1,4 @@
-// ─── User & Auth Types ────────────────────────────────────────────────────────
+﻿// â”€â”€â”€ User & Auth Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type UserRole = 'admin' | 'driver' | 'client';
 
@@ -8,8 +8,8 @@ export interface UserProfile {
   phone: string;
   role: UserRole;
   company_name: string;   // clients: raison sociale
-  zone: string;           // livreurs: secteur géographique (ex: "Ben Arous")
-  vehicle: string;        // livreurs: description véhicule
+  zone: string;           // livreurs: secteur gÃ©ographique (ex: "Ben Arous")
+  vehicle: string;        // livreurs: description vÃ©hicule
   is_active: boolean;
   created_at: string;
   created_by: string | null;
@@ -43,13 +43,13 @@ export interface ClientPricingRule {
   client_id?: string;
   client_name: string;
   company_name: string;
-  flat_rate: number; // Tarif unique appliqué partout en Tunisie
+  flat_rate: number; // Tarif unique appliquÃ© partout en Tunisie
   custom_note?: string;
   is_active: boolean;
   updated_at: string;
 }
 
-// ─── API Response Types ───────────────────────────────────────────────────────
+// â”€â”€â”€ API Response Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -75,7 +75,7 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
-// ─── Parcel & Delivery Note Types ─────────────────────────────────────────────
+// â”€â”€â”€ Parcel & Delivery Note Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type ParcelStatus =
   | 'pending'
@@ -117,10 +117,14 @@ export interface Parcel {
   driver_id?: string | null;
   driver_name?: string;
   status: ParcelStatus;
-  /** true = l'argent a été remis au client (expéditeur) */
+  /** true = l'argent a Ã©tÃ© remis au client (expÃ©diteur) */
   is_settled?: boolean;
-  /** date/heure du règlement */
+  /** date/heure du rÃ¨glement */
   settled_at?: string | null;
+  /** date/heure d'acceptation (statut acceptÃ© ou assignÃ© Ã  un livreur) */
+  accepted_at?: string | null;
+  /** date/heure de la derniÃ¨re mise Ã  jour de statut final (livrÃ©, retournÃ©, etc.) */
+  status_updated_at?: string | null;
   notes?: string;
   created_at: string;
   updated_at?: string;
@@ -173,5 +177,9 @@ export interface UpdateParcelPayload {
   status?: ParcelStatus;
   is_settled?: boolean;
   settled_at?: string | null;
+  /** date/heure d'acceptation (rempli auto quand status = 'accepted' | 'assigned') */
+  accepted_at?: string | null;
+  /** date/heure de la mise a jour de statut final (rempli auto) */
+  status_updated_at?: string | null;
   notes?: string;
 }

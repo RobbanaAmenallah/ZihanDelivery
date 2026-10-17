@@ -444,7 +444,10 @@ export const ParcelsManagementPage: React.FC = () => {
   // ── Export CSV Colis ─────────────────────────────────────────────────────────
   const handleExportParcelsCSV = () => {
     const headers = [
-      'N° Suivi', 'Date Création', 'Expéditeur', 'Tél Expéditeur',
+      'N° Suivi', 'Date Création', 'Heure Création',
+      'Date Acceptation', 'Heure Acceptation',
+      'Date Mise à Jour Statut', 'Heure Mise à Jour Statut',
+      'Expéditeur', 'Tél Expéditeur',
       'Destinataire', 'Tél Destinataire', 'Gouvernorat', 'Délégation', 'Adresse',
       'Description', 'Qté', 'Poids (kg)', 'Valeur Marchandise (DT)',
       'Frais Port (DT)', 'Total COD (DT)', 'Livreur', 'Statut', 'Règlement', 'Date Règlement',
@@ -452,6 +455,11 @@ export const ParcelsManagementPage: React.FC = () => {
     const rows = filteredParcels.map((p) => [
       `"${p.tracking_number}"`,
       `"${new Date(p.created_at).toLocaleDateString('fr-FR')}"`,
+      `"${new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}"`,
+      `"${p.accepted_at ? new Date(p.accepted_at).toLocaleDateString('fr-FR') : ''}"`,
+      `"${p.accepted_at ? new Date(p.accepted_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}"`,
+      `"${p.status_updated_at ? new Date(p.status_updated_at).toLocaleDateString('fr-FR') : ''}"`,
+      `"${p.status_updated_at ? new Date(p.status_updated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}"`,
       `"${p.sender_name}"`,
       `"${p.sender_phone}"`,
       `"${p.recipient_name}"`,
@@ -750,6 +758,7 @@ export const ParcelsManagementPage: React.FC = () => {
                 <th className="py-3 px-4">Tarification (DT)</th>
                 <th className="py-3 px-4">Livreur Assigné</th>
                 <th className="py-3 px-4">Statut</th>
+                <th className="py-3 px-4">Horodatages</th>
                 <th className="py-3 px-4">Règlement</th>
                 <th className="py-3 px-4 text-right">Bon &amp; Actions</th>
               </tr>
@@ -757,7 +766,7 @@ export const ParcelsManagementPage: React.FC = () => {
             <tbody className="divide-y divide-border/50">
               {filteredParcels.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={9} className="py-12 text-center text-muted-foreground">
                     <Package className="h-10 w-10 mx-auto mb-2 text-muted-foreground/40" />
                     <p className="text-sm font-semibold">Aucun colis trouvé</p>
                     <p className="text-xs">Créez votre premier colis avec le bouton ci-dessus.</p>
@@ -872,6 +881,73 @@ export const ParcelsManagementPage: React.FC = () => {
                         </select>
                         <div className="mt-1">
                           <StatusBadge status={parcel.status} size="sm" />
+                        </div>
+                      </td>
+
+                      {/* Horodatages */}
+                      <td className="py-3 px-4">
+                        <div className="space-y-1.5 text-[10px]">
+                          {/* Création */}
+                          <div className="flex items-start gap-1">
+                            <span className="w-2 h-2 mt-0.5 rounded-full bg-slate-400 shrink-0" />
+                            <div>
+                              <span className="text-muted-foreground font-medium block">Création</span>
+                              <span className="font-mono text-foreground">
+                                {new Date(parcel.created_at).toLocaleDateString('fr-FR')}
+                              </span>
+                              <span className="text-muted-foreground ml-1">
+                                {new Date(parcel.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </div>
+                          {/* Acceptation */}
+                          {parcel.accepted_at ? (
+                            <div className="flex items-start gap-1">
+                              <span className="w-2 h-2 mt-0.5 rounded-full bg-blue-500 shrink-0" />
+                              <div>
+                                <span className="text-muted-foreground font-medium block">Accepté</span>
+                                <span className="font-mono text-blue-700 dark:text-blue-300">
+                                  {new Date(parcel.accepted_at).toLocaleDateString('fr-FR')}
+                                </span>
+                                <span className="text-muted-foreground ml-1">
+                                  {new Date(parcel.accepted_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-1 opacity-40">
+                              <span className="w-2 h-2 mt-0.5 rounded-full bg-slate-300 shrink-0" />
+                              <span className="text-muted-foreground italic">Non accepté</span>
+                            </div>
+                          )}
+                          {/* Statut final */}
+                          {parcel.status_updated_at ? (
+                            <div className="flex items-start gap-1">
+                              <span className={`w-2 h-2 mt-0.5 rounded-full shrink-0 ${
+                                parcel.status === 'delivered' ? 'bg-emerald-500'
+                                : ['returned', 'refused', 'customer_absent', 'wrong_address', 'failed'].includes(parcel.status) ? 'bg-rose-500'
+                                : 'bg-amber-500'
+                              }`} />
+                              <div>
+                                <span className="text-muted-foreground font-medium block">Mise à jour</span>
+                                <span className={`font-mono ${
+                                  parcel.status === 'delivered' ? 'text-emerald-700 dark:text-emerald-300'
+                                  : ['returned', 'refused', 'customer_absent', 'wrong_address', 'failed'].includes(parcel.status) ? 'text-rose-700 dark:text-rose-300'
+                                  : 'text-amber-700 dark:text-amber-300'
+                                }`}>
+                                  {new Date(parcel.status_updated_at).toLocaleDateString('fr-FR')}
+                                </span>
+                                <span className="text-muted-foreground ml-1">
+                                  {new Date(parcel.status_updated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-1 opacity-40">
+                              <span className="w-2 h-2 mt-0.5 rounded-full bg-slate-300 shrink-0" />
+                              <span className="text-muted-foreground italic">En cours...</span>
+                            </div>
+                          )}
                         </div>
                       </td>
 
