@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Package,
   PlusCircle,
@@ -15,6 +16,7 @@ import {
   Pencil,
   ShieldCheck,
   Download,
+  MapPin,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -47,14 +49,26 @@ import { DateRangeFilter, applyDateFilter } from '@/components/admin/DateRangeFi
 import type { QuickFilter, DateRange } from '@/components/admin/DateRangeFilter';
 
 export const ParcelsManagementPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const urlStatus = searchParams.get('status');
+
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus || 'all');
   const [governorateFilter, setGovernorateFilter] = useState<string>('all');
+  const [zoneFilter, setZoneFilter] = useState<'all' | 'grand_tunis' | 'hors_grand_tunis'>('all');
   const [dateFilter, setDateFilter] = useState<QuickFilter>('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' });
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Synchronize statusFilter if URL query param changes
+  useEffect(() => {
+    if (urlStatus) {
+      setStatusFilter(urlStatus);
+    }
+  }, [urlStatus]);
+
 
   // Drivers & Clients
   const [drivers, setDrivers] = useState<UserProfile[]>([]);
@@ -518,9 +532,15 @@ export const ParcelsManagementPage: React.FC = () => {
         governorateFilter === 'all' ||
         p.recipient_governorate.toLowerCase() === governorateFilter.toLowerCase();
 
-      return matchesSearch && matchesStatus && matchesGov;
+      const isGrandTunis = GRAND_TUNIS_GOVERNORATES.includes(p.recipient_governorate);
+      const matchesZone =
+        zoneFilter === 'all' ||
+        (zoneFilter === 'grand_tunis' && isGrandTunis) ||
+        (zoneFilter === 'hors_grand_tunis' && !isGrandTunis);
+
+      return matchesSearch && matchesStatus && matchesGov && matchesZone;
     });
-  }, [parcels, searchQuery, statusFilter, governorateFilter, dateFilter, dateRange]);
+  }, [parcels, searchQuery, statusFilter, governorateFilter, zoneFilter, dateFilter, dateRange]);
 
   // Stats Calculations
   const stats = useMemo(() => {
@@ -536,6 +556,21 @@ export const ParcelsManagementPage: React.FC = () => {
 
     return { total, pending, inTransit, delivered, totalCollected };
   }, [parcels]);
+
+  // Zone Breakdown Stats
+  const zoneStats = useMemo(() => {
+    const grandTunisParcels = parcels.filter((p) => GRAND_TUNIS_GOVERNORATES.includes(p.recipient_governorate));
+    const horsGrandTunisParcels = parcels.filter((p) => !GRAND_TUNIS_GOVERNORATES.includes(p.recipient_governorate));
+
+    return {
+      total: parcels.length,
+      grandTunisCount: grandTunisParcels.length,
+      grandTunisCOD: grandTunisParcels.reduce((sum, p) => sum + (p.total_amount || 0), 0),
+      horsGrandTunisCount: horsGrandTunisParcels.length,
+      horsGrandTunisCOD: horsGrandTunisParcels.reduce((sum, p) => sum + (p.total_amount || 0), 0),
+    };
+  }, [parcels]);
+
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -649,8 +684,122 @@ export const ParcelsManagementPage: React.FC = () => {
         </Card>
       </div>
 
+      {/* ── Rubrique par Zone Géographique (Admin) ───────────────────────── */}
+      <div className="bg-card p-3 sm:p-4 rounded-xl border border-border/80 shadow-xs space-y-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-[#EA4E52]/10 text-[#EA4E52]">
+              <MapPin className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-black text-foreground">
+                Rubrique par Zone Géographique
+              </h3>
+              <p className="text-[11px] text-muted-foreground">
+                Répartition des colis et filtrage direct par secteur de livraison
+              </p>
+            </div>
+          </div>
+          {zoneFilter !== 'all' && (
+            <button
+              onClick={() => {
+                setZoneFilter('all');
+                setGovernorateFilter('all');
+              }}
+              className="text-[11px] font-bold text-[#1B3D87] hover:underline self-start sm:self-auto"
+            >
+              Réinitialiser la zone (Tous)
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+          {/* Rubrique 1: Toutes Zones */}
+          <button
+            type="button"
+            onClick={() => {
+              setZoneFilter('all');
+              setGovernorateFilter('all');
+            }}
+            className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
+              zoneFilter === 'all'
+                ? 'border-[#1B3D87] bg-[#1B3D87]/10 font-bold text-[#1B3D87] dark:text-blue-300 ring-2 ring-[#1B3D87]/30 shadow-xs'
+                : 'border-border/80 bg-background hover:bg-muted/40 text-foreground'
+            }`}
+          >
+            <div>
+              <span className="font-black text-xs block">🌐 Toutes les Zones</span>
+              <span className="text-[10px] text-muted-foreground">Ensemble des 24 Gouvernorats</span>
+            </div>
+            <div className="text-right">
+              <span className="font-mono font-black text-sm block">{zoneStats.total}</span>
+              <span className="text-[10px] text-muted-foreground">colis</span>
+            </div>
+          </button>
+
+          {/* Rubrique 2: Grand Tunis */}
+          <button
+            type="button"
+            onClick={() => {
+              setZoneFilter('grand_tunis');
+              if (governorateFilter !== 'all' && !GRAND_TUNIS_GOVERNORATES.includes(governorateFilter)) {
+                setGovernorateFilter('all');
+              }
+            }}
+            className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
+              zoneFilter === 'grand_tunis'
+                ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/40 font-bold text-blue-700 dark:text-blue-300 ring-2 ring-blue-600/30 shadow-xs'
+                : 'border-border/80 bg-background hover:bg-muted/40 text-foreground'
+            }`}
+          >
+            <div>
+              <span className="font-black text-xs block">🏙️ Zone Grand Tunis</span>
+              <span className="text-[10px] text-muted-foreground">Tunis, Ariana, Ben Arous, Manouba</span>
+            </div>
+            <div className="text-right">
+              <span className="font-mono font-black text-sm text-blue-700 dark:text-blue-300 block">
+                {zoneStats.grandTunisCount}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-mono font-bold">
+                {zoneStats.grandTunisCOD.toFixed(1)} DT
+              </span>
+            </div>
+          </button>
+
+          {/* Rubrique 3: Hors Grand Tunis */}
+          <button
+            type="button"
+            onClick={() => {
+              setZoneFilter('hors_grand_tunis');
+              if (governorateFilter !== 'all' && GRAND_TUNIS_GOVERNORATES.includes(governorateFilter)) {
+                setGovernorateFilter('all');
+              }
+            }}
+            className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
+              zoneFilter === 'hors_grand_tunis'
+                ? 'border-purple-600 bg-purple-50 dark:bg-purple-950/40 font-bold text-purple-700 dark:text-purple-300 ring-2 ring-purple-600/30 shadow-xs'
+                : 'border-border/80 bg-background hover:bg-muted/40 text-foreground'
+            }`}
+          >
+            <div>
+              <span className="font-black text-xs block">🚗 Zone Hors Grand Tunis</span>
+              <span className="text-[10px] text-muted-foreground">Nabeul, Sousse, Sfax, Bizerte...</span>
+            </div>
+            <div className="text-right">
+              <span className="font-mono font-black text-sm text-purple-700 dark:text-purple-300 block">
+                {zoneStats.horsGrandTunisCount}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-mono font-bold">
+                {zoneStats.horsGrandTunisCOD.toFixed(1)} DT
+              </span>
+            </div>
+          </button>
+        </div>
+      </div>
+
       {/* Filter and Search Bar */}
       <div className="flex flex-col gap-3 bg-card p-3.5 rounded-xl border border-border/80 shadow-sm">
+
         {/* Row 1: Search + Date filter */}
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
           {/* Search */}
@@ -1273,7 +1422,7 @@ export const ParcelsManagementPage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 <div>
                   <label className="text-[10px] font-bold text-foreground mb-0.5 block">Gouvernorat *</label>
                   <select
@@ -1295,14 +1444,6 @@ export const ParcelsManagementPage: React.FC = () => {
                 </div>
 
                 <Input
-                  label="Ville"
-                  placeholder="Médina"
-                  value={createForm.recipient_delegation || ''}
-                  onChange={(e) => setCreateForm({ ...createForm, recipient_delegation: e.target.value })}
-                  className="h-8 text-xs px-2 py-0.5"
-                />
-
-                <Input
                   label="Code Postal"
                   placeholder="2063"
                   value={createForm.recipient_postal_code || ''}
@@ -1310,6 +1451,7 @@ export const ParcelsManagementPage: React.FC = () => {
                   className="h-8 text-xs px-2 py-0.5"
                 />
               </div>
+
 
               <Input
                 label="Adresse Complète *"

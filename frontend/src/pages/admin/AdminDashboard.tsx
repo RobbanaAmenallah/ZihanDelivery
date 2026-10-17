@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { SettlementBadge } from '@/components/ui/SettlementBadge';
 import { DocumentViewerModal } from '@/components/documents/DocumentViewerModal';
@@ -218,43 +217,134 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ── 5 Main KPI Cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        <StatCard
-          title="Colis sur la Période"
-          value={stats.total}
-          icon={<Package className="h-5 w-5 text-[#1B3D87]" />}
-          description={`${stats.inTransit} en cours de livraison`}
-        />
-        <StatCard
-          title="Taux de Livraison"
-          value={`${stats.successRate}%`}
-          icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
-          iconBgColor="bg-emerald-50 dark:bg-emerald-950/50"
-          description={`${stats.delivered} livrés avec succès`}
-        />
-        <StatCard
-          title="Taux de Retour Colis"
-          value={`${stats.returnRate}%`}
-          icon={<RotateCcw className="h-5 w-5 text-[#EA4E52]" />}
-          iconBgColor="bg-red-50 dark:bg-red-950/50"
-          description={`${stats.issues} retours / échecs`}
-        />
-        <StatCard
-          title="Total Encaissé (COD)"
-          value={`${stats.totalCOD.toFixed(3)} DT`}
-          icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
-          iconBgColor="bg-emerald-50 dark:bg-emerald-950/50"
-          description="Encaissé en espèces"
-        />
-        <StatCard
-          title="Chiffre d'Affaires ZIHAN"
-          value={`${stats.totalRevenue.toFixed(3)} DT`}
-          icon={<TrendingUp className="h-5 w-5 text-[#1B3D87]" />}
-          iconBgColor="bg-blue-50 dark:bg-blue-950/50"
-          description="Frais de port générés"
-        />
+      {/* ── 5 Main KPI Cards (With Clickable Details Button) ──────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        {/* Card 1: Colis sur la Période */}
+        <div className="flex flex-col justify-between bg-card rounded-2xl border border-border/80 p-4 shadow-sm hover:border-[#1B3D87] transition-all">
+          <div>
+            <div className="flex items-center justify-between pb-2">
+              <span className="text-xs font-bold text-muted-foreground">Colis sur la Période</span>
+              <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-[#1B3D87] dark:text-blue-400">
+                <Package className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-[#162033] dark:text-white font-mono">
+              {stats.total}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.inTransit} en cours de livraison
+            </p>
+          </div>
+          <Link
+            to={`${ROUTES.ADMIN_SHIPMENTS}?status=all`}
+            className="mt-3 flex items-center justify-between px-2.5 py-1 text-xs font-bold text-[#1B3D87] dark:text-blue-400 bg-blue-50/80 hover:bg-blue-100 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-800 transition-colors"
+          >
+            <span>Consulter les détails</span>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* Card 2: Taux de Livraison */}
+        <div className="flex flex-col justify-between bg-card rounded-2xl border border-border/80 p-4 shadow-sm hover:border-emerald-400 transition-all">
+          <div>
+            <div className="flex items-center justify-between pb-2">
+              <span className="text-xs font-bold text-muted-foreground">Taux de Livraison</span>
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-emerald-600 font-mono">
+              {stats.successRate}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.delivered} livrés avec succès
+            </p>
+          </div>
+          <Link
+            to={`${ROUTES.ADMIN_SHIPMENTS}?status=delivered`}
+            className="mt-3 flex items-center justify-between px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/80 hover:bg-emerald-100 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-800 transition-colors"
+          >
+            <span>Consulter les livrés</span>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* Card 3: Taux de Retour Colis */}
+        <div className="flex flex-col justify-between bg-card rounded-2xl border border-rose-200/80 dark:border-rose-900/60 p-4 shadow-sm hover:border-rose-400 transition-all bg-gradient-to-br from-rose-50/20 to-transparent">
+          <div>
+            <div className="flex items-center justify-between pb-2">
+              <span className="text-xs font-bold text-rose-800 dark:text-rose-300">Taux de Retour Colis</span>
+              <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-950/50 text-[#EA4E52]">
+                <RotateCcw className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-[#EA4E52] font-mono">
+              {stats.returnRate}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.issues} retours / échecs
+            </p>
+          </div>
+          <Link
+            to={`${ROUTES.ADMIN_SHIPMENTS}?status=issues`}
+            className="mt-3 flex items-center justify-between px-2.5 py-1 text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 rounded-lg border border-rose-200 dark:border-rose-800 transition-colors"
+          >
+            <span>Consulter les retours</span>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* Card 4: Total Encaissé (COD) */}
+        <div className="flex flex-col justify-between bg-card rounded-2xl border border-border/80 p-4 shadow-sm hover:border-emerald-400 transition-all">
+          <div>
+            <div className="flex items-center justify-between pb-2">
+              <span className="text-xs font-bold text-muted-foreground">Total Encaissé (COD)</span>
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600">
+                <DollarSign className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-[#162033] dark:text-white font-mono">
+              {stats.totalCOD.toFixed(3)} DT
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Encaissé en espèces
+            </p>
+          </div>
+          <Link
+            to={`${ROUTES.ADMIN_SHIPMENTS}?status=delivered`}
+            className="mt-3 flex items-center justify-between px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/80 hover:bg-emerald-100 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-800 transition-colors"
+          >
+            <span>Détails encaissements</span>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* Card 5: Chiffre d'Affaires ZIHAN */}
+        <div className="flex flex-col justify-between bg-card rounded-2xl border border-border/80 p-4 shadow-sm hover:border-blue-400 transition-all">
+          <div>
+            <div className="flex items-center justify-between pb-2">
+              <span className="text-xs font-bold text-muted-foreground">Chiffre d'Affaires ZIHAN</span>
+              <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-[#1B3D87]">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-[#162033] dark:text-white font-mono">
+              {stats.totalRevenue.toFixed(3)} DT
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Frais de port générés
+            </p>
+          </div>
+          <Link
+            to={ROUTES.ADMIN_ANALYTICS}
+            className="mt-3 flex items-center justify-between px-2.5 py-1 text-xs font-bold text-[#1B3D87] dark:text-blue-400 bg-blue-50/80 hover:bg-blue-100 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-800 transition-colors"
+          >
+            <span>Détails financiers</span>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
       </div>
+
 
       {/* ── Attention Banner (Pending / Issues) ─────────────────────────────────── */}
       {(stats.pending > 0 || stats.issues > 0) && (

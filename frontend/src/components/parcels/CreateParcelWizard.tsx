@@ -253,26 +253,19 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
                   onChange={(e) => setFormData({ ...formData, recipientSecondaryPhone: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Select
-                  label="Gouvernorat *"
-                  value={formData.governorate}
-                  onChange={(e) => setFormData({ ...formData, governorate: e.target.value })}
-                  options={ALL_GOVERNORATES.map((gov) => ({ value: gov, label: gov }))}
-                />
-                <Input
-                  label="Délégation / Ville *"
-                  placeholder="Ex: Nouvelle Médina"
-                  value={formData.delegation}
-                  onChange={(e) => setFormData({ ...formData, delegation: e.target.value })}
-                />
-              </div>
+              <Select
+                label="Gouvernorat *"
+                value={formData.governorate}
+                onChange={(e) => setFormData({ ...formData, governorate: e.target.value })}
+                options={ALL_GOVERNORATES.map((gov) => ({ value: gov, label: gov }))}
+              />
               <Input
                 label="Adresse Complète & Repère *"
                 placeholder="Ex: Résidence Ennasr, Bloc B, Apt 14, Rue..."
                 value={formData.recipientAddress}
                 onChange={(e) => setFormData({ ...formData, recipientAddress: e.target.value })}
               />
+
             </div>
           )}
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Package,
   PlusCircle,
@@ -27,15 +27,25 @@ import { ROUTES } from '@/routes/paths';
 const RETURN_STATUSES = ['customer_absent', 'wrong_address', 'failed', 'returned', 'refused'];
 
 export const ClientShipmentsPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const urlStatus = searchParams.get('status');
+
   const { profile, user } = useAuth();
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus || 'all');
   const [dateFilter, setDateFilter] = useState<QuickFilter>('all');
   const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' });
   const [isDocModalOpen, setIsDocModalOpen] = useState<boolean>(false);
   const [selectedParcelForDoc, setSelectedParcelForDoc] = useState<DeliveryNoteData | null>(null);
+
+  // Synchronize statusFilter if URL query param changes
+  useEffect(() => {
+    if (urlStatus) {
+      setStatusFilter(urlStatus);
+    }
+  }, [urlStatus]);
 
   const loadParcels = useCallback(async () => {
     setIsLoading(true);
