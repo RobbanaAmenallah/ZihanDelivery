@@ -341,11 +341,35 @@ export async function updateDbParcel(
   const { isConfigured } = getActiveSupabaseConfig();
   const client = getSupabaseClient();
 
+  // ── Compute auto-timestamps OUTSIDE isConfigured block so local cache can also use them ──
+  const now = new Date().toISOString();
+  let computedAcceptedAt: string | null | undefined = undefined;
+  let computedStatusUpdatedAt: string | null | undefined = undefined;
+
+  if (payload.status !== undefined) {
+    // accepted_at : enregistré une seule fois lors du premier passage en accepted/assigned
+    if (payload.status === 'accepted' || payload.status === 'assigned') {
+      const cached = getLocalCache().find((p) => p.id === parcelId);
+      if (!cached?.accepted_at) {
+        computedAcceptedAt = payload.accepted_at ?? now;
+      }
+    }
+    // status_updated_at : mis à jour à chaque changement de statut (hors pending)
+    if (payload.status !== 'pending') {
+      computedStatusUpdatedAt = payload.status_updated_at ?? now;
+    }
+  }
+  // Valeurs manuelles explicites (admin corrige une date)
+  if (payload.accepted_at !== undefined && computedAcceptedAt === undefined) {
+    computedAcceptedAt = payload.accepted_at;
+  }
+  if (payload.status_updated_at !== undefined && computedStatusUpdatedAt === undefined) {
+    computedStatusUpdatedAt = payload.status_updated_at;
+  }
+
   if (isConfigured) {
     try {
-      const updateData: Record<string, unknown> = {
-        updated_at: new Date().toISOString(),
-      };
+      const updateData: Record<string, unknown> = { updated_at: now };
 
       // 1. Expéditeur (Sender)
       if (payload.sender_name !== undefined) updateData.sender_name = payload.sender_name;
@@ -381,42 +405,16 @@ export async function updateDbParcel(
       if (payload.driver_name !== undefined) updateData.driver_name = payload.driver_name;
       if (payload.driver_id !== undefined) updateData.driver_id = payload.driver_id;
       if (payload.notes !== undefined) updateData.notes = payload.notes;
+      if (payload.status !== undefined) updateData.status = payload.status;
 
-      if (payload.status !== undefined) {
-        updateData.status = payload.status;
-
-        const now = new Date().toISOString();
-
-        // accepted_at : rempli automatiquement quand le colis passe en "accepted" ou "assigned"
-        // On ne l'écrase pas s'il existe déjà (première acceptation uniquement)
-        if (payload.status === 'accepted' || payload.status === 'assigned') {
-          // On lit le colis actuel dans le cache local pour vérifier s'il a déjà un accepted_at
-          const cached = getLocalCache().find((p) => p.id === parcelId);
-          if (!cached?.accepted_at) {
-            updateData.accepted_at = payload.accepted_at ?? now;
-          }
-        }
-
-        // status_updated_at : mis à jour à chaque changement de statut (sauf retour en pending)
-        if (payload.status !== 'pending') {
-          updateData.status_updated_at = payload.status_updated_at ?? now;
-        }
-      }
-
-      // Gestion manuelle si fourni explicitement (admin corrige une date)
-      if (payload.accepted_at !== undefined && updateData.accepted_at === undefined) {
-        updateData.accepted_at = payload.accepted_at;
-      }
-      if (payload.status_updated_at !== undefined && updateData.status_updated_at === undefined) {
-        updateData.status_updated_at = payload.status_updated_at;
-      }
+      // Timestamps calculés en dehors du bloc
+      if (computedAcceptedAt !== undefined) updateData.accepted_at = computedAcceptedAt;
+      if (computedStatusUpdatedAt !== undefined) updateData.status_updated_at = computedStatusUpdatedAt;
 
       // 6. Règlement (Settlement)
       if (payload.is_settled !== undefined) {
         updateData.is_settled = Boolean(payload.is_settled);
-        updateData.settled_at = payload.is_settled
-          ? (payload.settled_at ?? new Date().toISOString())
-          : null;
+        updateData.settled_at = payload.is_settled ? (payload.settled_at ?? now) : null;
       }
 
       await client.from('parcels').update(updateData).eq('id', parcelId);
@@ -438,23 +436,16 @@ export async function updateDbParcel(
           ? gAmount + dFee
           : p.total_amount;
 
-      // Merge les timestamps calculés (accepted_at, status_updated_at) depuis updateData
-      const extraTimestamps: Partial<typeof p> = {};
-      if ('accepted_at' in updateData) {
-        extraTimestamps.accepted_at = updateData.accepted_at as string | null;
-      }
-      if ('status_updated_at' in updateData) {
-        extraTimestamps.status_updated_at = updateData.status_updated_at as string | null;
-      }
-
       return {
         ...p,
         ...payload,
-        ...extraTimestamps,
+        // Timestamps calculés (écrasent les éventuelles valeurs dans payload)
+        ...(computedAcceptedAt !== undefined ? { accepted_at: computedAcceptedAt } : {}),
+        ...(computedStatusUpdatedAt !== undefined ? { status_updated_at: computedStatusUpdatedAt } : {}),
         goods_amount: gAmount,
         delivery_fee: dFee,
         total_amount: tAmount,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       };
     }
     return p;
