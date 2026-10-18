@@ -415,6 +415,19 @@ export async function updateDbParcel(
       if (payload.is_settled !== undefined) {
         updateData.is_settled = Boolean(payload.is_settled);
         updateData.settled_at = payload.is_settled ? (payload.settled_at ?? now) : null;
+        if (payload.settlement_method !== undefined) {
+          updateData.settlement_method = payload.settlement_method;
+        }
+        if (payload.settlement_note !== undefined) {
+          updateData.settlement_note = payload.settlement_note;
+        }
+      } else {
+        if (payload.settlement_method !== undefined) {
+          updateData.settlement_method = payload.settlement_method;
+        }
+        if (payload.settlement_note !== undefined) {
+          updateData.settlement_note = payload.settlement_note;
+        }
       }
 
       await client.from('parcels').update(updateData).eq('id', parcelId);

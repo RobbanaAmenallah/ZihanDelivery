@@ -16,6 +16,7 @@ import {
   Receipt,
   History,
   Tag,
+  Banknote,
 } from 'lucide-react';
 import { ZihanOfficialLogo } from '@/components/branding/ZihanOfficialLogo';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,7 @@ const adminNavItems: NavItem[] = [
   { title: 'Tableau de Bord', href: ROUTES.ADMIN, icon: LayoutDashboard },
   { title: 'Gestion des Colis', href: ROUTES.ADMIN_SHIPMENTS, icon: Package, badge: 'Direct', badgeVariant: 'accent' },
   { title: 'Facturation Clients', href: ROUTES.ADMIN_INVOICES, icon: Receipt, badge: '50% Retour', badgeVariant: 'accent' },
+  { title: 'Règlement', href: ROUTES.ADMIN_SETTLEMENTS, icon: Banknote, badge: 'Bordereau', badgeVariant: 'accent' },
   { title: 'Tarification Clients', href: ROUTES.ADMIN_PRICING, icon: Tag, badge: 'Sur-mesure', badgeVariant: 'accent' },
   { title: 'Gestion Utilisateurs', href: ROUTES.ADMIN_USERS, icon: UserCog, badge: 'Admin', badgeVariant: 'primary' },
   { title: 'Analytiques & Stats', href: ROUTES.ADMIN_ANALYTICS, icon: BarChart2 },
@@ -47,6 +49,7 @@ const clientNavItems: NavItem[] = [
   { title: 'Tableau de Bord', href: ROUTES.CLIENT, icon: LayoutDashboard },
   { title: 'Mes Expéditions', href: ROUTES.CLIENT_SHIPMENTS, icon: Package, badge: 'Suivi', badgeVariant: 'primary' },
   { title: 'Nouveau Bon', href: ROUTES.CLIENT_CREATE, icon: PlusCircle },
+  { title: 'Règlement', href: ROUTES.CLIENT_SETTLEMENTS, icon: Banknote, badge: 'Bordereau', badgeVariant: 'accent' },
 ];
 
 const driverNavItems: NavItem[] = [

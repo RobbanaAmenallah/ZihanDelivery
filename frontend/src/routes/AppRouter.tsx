@@ -11,11 +11,13 @@ import { ParcelsManagementPage } from '@/pages/admin/ParcelsManagementPage';
 import { AdminAnalyticsPage } from '@/pages/admin/AdminAnalyticsPage';
 import { ClientPricingManagementPage } from '@/pages/admin/ClientPricingManagementPage';
 import { AdminInvoicesPage } from '@/pages/admin/AdminInvoicesPage';
+import { AdminSettlementsPage } from '@/pages/admin/AdminSettlementsPage';
 
 // Client Pages
 import { ClientDashboardPage } from '@/pages/client/ClientDashboardPage';
 import { ClientShipmentsPage } from '@/pages/client/ClientShipmentsPage';
 import { ClientCreateParcelPage } from '@/pages/client/ClientCreateParcelPage';
+import { ClientSettlementsPage } from '@/pages/client/ClientSettlementsPage';
 
 // Driver Pages
 import { DriverDashboardPage } from '@/pages/driver/DriverDashboardPage';
@@ -57,6 +59,7 @@ const router = createBrowserRouter([
       { path: ROUTES.ADMIN, element: <AdminDashboard /> },
       { path: ROUTES.ADMIN_SHIPMENTS, element: <ParcelsManagementPage /> },
       { path: ROUTES.ADMIN_INVOICES, element: <AdminInvoicesPage /> },
+      { path: ROUTES.ADMIN_SETTLEMENTS, element: <AdminSettlementsPage /> },
       { path: ROUTES.ADMIN_PRICING, element: <ClientPricingManagementPage /> },
       { path: ROUTES.ADMIN_USERS, element: <UsersManagementPage /> },
       { path: ROUTES.ADMIN_ANALYTICS, element: <AdminAnalyticsPage /> },
@@ -75,6 +78,7 @@ const router = createBrowserRouter([
       { path: ROUTES.CLIENT, element: <ClientDashboardPage /> },
       { path: ROUTES.CLIENT_SHIPMENTS, element: <ClientShipmentsPage /> },
       { path: ROUTES.CLIENT_CREATE, element: <ClientCreateParcelPage /> },
+      { path: ROUTES.CLIENT_SETTLEMENTS, element: <ClientSettlementsPage /> },
       { path: ROUTES.CLIENT_INVOICES, element: <Navigate to={ROUTES.CLIENT} replace /> },
     ],
   },

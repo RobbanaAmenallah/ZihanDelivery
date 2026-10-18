@@ -1,4 +1,4 @@
-﻿// â”€â”€â”€ User & Auth Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ User & Auth Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type UserRole = 'admin' | 'driver' | 'client';
 
@@ -15,6 +15,9 @@ export interface UserProfile {
   created_by: string | null;
   // from auth.users (joined)
   email?: string;
+  address?: string;
+  city?: string;
+  governorate?: string;
 }
 
 export interface CreateUserPayload {
@@ -117,13 +120,17 @@ export interface Parcel {
   driver_id?: string | null;
   driver_name?: string;
   status: ParcelStatus;
-  /** true = l'argent a Ã©tÃ© remis au client (expÃ©diteur) */
+  /** true = l'argent a été remis au client (expéditeur) */
   is_settled?: boolean;
-  /** date/heure du rÃ¨glement */
+  /** date/heure du règlement */
   settled_at?: string | null;
-  /** date/heure d'acceptation (statut acceptÃ© ou assignÃ© Ã  un livreur) */
+  /** mode de règlement: 'cheque' | 'especes' */
+  settlement_method?: 'cheque' | 'especes' | string | null;
+  /** note ou référence du règlement */
+  settlement_note?: string;
+  /** date/heure d'acceptation (statut accepté ou assigné à un livreur) */
   accepted_at?: string | null;
-  /** date/heure de la derniÃ¨re mise Ã  jour de statut final (livrÃ©, retournÃ©, etc.) */
+  /** date/heure de la dernière mise à jour de statut final (livré, retourné, etc.) */
   status_updated_at?: string | null;
   notes?: string;
   created_at: string;
@@ -177,6 +184,8 @@ export interface UpdateParcelPayload {
   status?: ParcelStatus;
   is_settled?: boolean;
   settled_at?: string | null;
+  settlement_method?: 'cheque' | 'especes' | string | null;
+  settlement_note?: string;
   /** date/heure d'acceptation (rempli auto quand status = 'accepted' | 'assigned') */
   accepted_at?: string | null;
   /** date/heure de la mise a jour de statut final (rempli auto) */

@@ -10,6 +10,7 @@ export const ROUTES = {
   ADMIN_USERS: '/admin/users',
   ADMIN_SHIPMENTS: '/admin/shipments',
   ADMIN_INVOICES: '/admin/invoices',
+  ADMIN_SETTLEMENTS: '/admin/settlements',
   ADMIN_PRICING: '/admin/pricing',
   ADMIN_DRIVERS: '/admin/drivers',
   ADMIN_CLIENTS: '/admin/clients',
@@ -21,6 +22,7 @@ export const ROUTES = {
   CLIENT_SHIPMENTS: '/client/shipments',
   CLIENT_CREATE: '/client/create',
   CLIENT_INVOICES: '/client/invoices',
+  CLIENT_SETTLEMENTS: '/client/settlements',
 
   // Driver Portal
   DRIVER: '/driver',
