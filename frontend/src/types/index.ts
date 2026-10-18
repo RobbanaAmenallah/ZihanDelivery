@@ -132,6 +132,8 @@ export interface Parcel {
   accepted_at?: string | null;
   /** date/heure de la dernière mise à jour de statut final (livré, retourné, etc.) */
   status_updated_at?: string | null;
+  /** date/heure exacte de livraison du colis */
+  delivered_at?: string | null;
   notes?: string;
   created_at: string;
   updated_at?: string;
@@ -190,5 +192,7 @@ export interface UpdateParcelPayload {
   accepted_at?: string | null;
   /** date/heure de la mise a jour de statut final (rempli auto) */
   status_updated_at?: string | null;
+  /** date/heure exacte de livraison */
+  delivered_at?: string | null;
   notes?: string;
 }

@@ -20,7 +20,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDbParcels, isParcelForClient } from '@/services/parcelsDb';
+import { getDbParcels, isParcelForClient, getParcelDeliveryDate } from '@/services/parcelsDb';
 import type { Parcel } from '@/types';
 import {
   SettlementViewerModal,
@@ -91,8 +91,8 @@ export const ClientSettlementsPage: React.FC = () => {
       if (settlementFilter === 'settled' && !p.is_settled) return false;
       if (settlementFilter === 'unsettled' && p.is_settled) return false;
 
-      // Filter period
-      const dDateStr = p.status_updated_at || p.settled_at || p.created_at;
+      // Filter period (vraie date de livraison)
+      const dDateStr = getParcelDeliveryDate(p);
       if (!dDateStr) return true;
       const dDate = new Date(dDateStr);
 
@@ -167,7 +167,7 @@ export const ClientSettlementsPage: React.FC = () => {
     const groupsMap = new Map<string, Parcel[]>();
 
     clientDeliveredParcels.forEach((p) => {
-      const rawDate = p.status_updated_at || p.settled_at || p.created_at || new Date().toISOString();
+      const rawDate = getParcelDeliveryDate(p) || new Date().toISOString();
       const dateKey = rawDate.split('T')[0];
 
       if (!groupsMap.has(dateKey)) {
@@ -189,7 +189,7 @@ export const ClientSettlementsPage: React.FC = () => {
         dayTotal += gAmount;
         if (!p.is_settled) allSettled = false;
 
-        const rawDeliveryDate = p.status_updated_at || p.settled_at || p.created_at;
+        const rawDeliveryDate = getParcelDeliveryDate(p);
         const formattedDeliveryDate = rawDeliveryDate
           ? new Date(rawDeliveryDate).toLocaleDateString('fr-FR', {
               day: '2-digit',
@@ -208,6 +208,7 @@ export const ClientSettlementsPage: React.FC = () => {
           recipientPhone: p.recipient_phone,
           recipientGovernorate: p.recipient_governorate,
           deliveryDate: formattedDeliveryDate,
+          rawDeliveryDate: rawDeliveryDate ? rawDeliveryDate.split('T')[0] : dateKey,
           goodsAmount: gAmount,
           isSettled: Boolean(p.is_settled),
           settledAt: p.settled_at,
@@ -275,7 +276,7 @@ export const ClientSettlementsPage: React.FC = () => {
 
     let rowIdx = 1;
     const rows = clientDeliveredParcels.map((p) => {
-      const rawDate = p.status_updated_at || p.settled_at || p.created_at;
+      const rawDate = getParcelDeliveryDate(p);
       const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString('fr-FR') : '';
       return [
         rowIdx++,

@@ -21,12 +21,14 @@ import {
   PackageCheck,
   AlertTriangle,
   FileText,
+  Calendar,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { getDbParcels, updateDbParcel, isParcelForClient } from '@/services/parcelsDb';
+import { getDbParcels, updateDbParcel, isParcelForClient, getParcelDeliveryDate } from '@/services/parcelsDb';
 import { getDbUsers } from '@/services/usersDb';
 import type { Parcel, UserProfile } from '@/types';
 import {
@@ -69,6 +71,10 @@ export const AdminSettlementsPage: React.FC = () => {
   // Expanded dates state (accordion: which dates have details open)
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
 
+  // Inline delivery date edit state
+  const [editingDeliveryDateId, setEditingDeliveryDateId] = useState<string | null>(null);
+  const [tempDeliveryDate, setTempDeliveryDate] = useState<string>('');
+
   // Modal Bordereau Official State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [customPrintData, setCustomPrintData] = useState<ClientSettlementData | null>(null);
@@ -102,12 +108,12 @@ export const AdminSettlementsPage: React.FC = () => {
     return clients.find((c) => c.id === selectedClientId) || null;
   }, [clients, selectedClientId]);
 
-  // Helper to filter parcels by period
+  // Helper to filter parcels by period (basé sur la vraie date de livraison)
   const filterByPeriod = useCallback(
     (p: Parcel) => {
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
-      const dDateStr = p.status_updated_at || p.settled_at || p.created_at;
+      const dDateStr = getParcelDeliveryDate(p);
       if (!dDateStr) return true;
       const dDate = new Date(dDateStr);
 
@@ -244,7 +250,7 @@ export const AdminSettlementsPage: React.FC = () => {
     const groupsMap = new Map<string, Parcel[]>();
 
     deliveredParcels.forEach((p) => {
-      const rawDate = p.status_updated_at || p.settled_at || p.created_at || new Date().toISOString();
+      const rawDate = getParcelDeliveryDate(p) || new Date().toISOString();
       const dateKey = rawDate.split('T')[0];
 
       if (!groupsMap.has(dateKey)) {
@@ -266,7 +272,7 @@ export const AdminSettlementsPage: React.FC = () => {
         dayTotal += gAmount;
         if (!p.is_settled) allSettled = false;
 
-        const rawDeliveryDate = p.status_updated_at || p.settled_at || p.created_at;
+        const rawDeliveryDate = getParcelDeliveryDate(p);
         const formattedDeliveryDate = rawDeliveryDate
           ? new Date(rawDeliveryDate).toLocaleDateString('fr-FR', {
               day: '2-digit',
@@ -285,6 +291,7 @@ export const AdminSettlementsPage: React.FC = () => {
           recipientPhone: p.recipient_phone,
           recipientGovernorate: p.recipient_governorate,
           deliveryDate: formattedDeliveryDate,
+          rawDeliveryDate: rawDeliveryDate ? rawDeliveryDate.split('T')[0] : dateKey,
           goodsAmount: gAmount,
           isSettled: Boolean(p.is_settled),
           settledAt: p.settled_at,
@@ -364,6 +371,40 @@ export const AdminSettlementsPage: React.FC = () => {
     }
   };
 
+  // Enregistrer la date de livraison corrigée ou personnalisée
+  const handleSaveDeliveryDate = async (parcelId: string) => {
+    if (!tempDeliveryDate) return;
+    setIsUpdating(true);
+    try {
+      const fullIso = tempDeliveryDate + 'T12:00:00Z';
+      await updateDbParcel(parcelId, {
+        delivered_at: fullIso,
+        status_updated_at: fullIso,
+      });
+
+      setParcels((prev) =>
+        prev.map((p) =>
+          p.id === parcelId || p.tracking_number === parcelId
+            ? {
+                ...p,
+                delivered_at: fullIso,
+                status_updated_at: fullIso,
+              }
+            : p
+        )
+      );
+
+      setEditingDeliveryDateId(null);
+      setActionSuccessMsg('Date de livraison mise à jour avec succès');
+      setTimeout(() => setActionSuccessMsg(null), 3000);
+    } catch (err) {
+      console.error('Erreur mise à jour date de livraison:', err);
+      alert('Impossible de mettre à jour la date de livraison');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // Settle all unsettled parcels in the current filter in ESPÈCES
   const handleSettleAllFiltered = async () => {
     const unsettled = deliveredParcels.filter((p) => !p.is_settled);
@@ -422,8 +463,16 @@ export const AdminSettlementsPage: React.FC = () => {
 
     let rowIdx = 1;
     const rows = deliveredParcels.map((p) => {
-      const rawDate = p.status_updated_at || p.settled_at || p.created_at;
-      const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString('fr-FR') : '';
+      const rawDate = getParcelDeliveryDate(p);
+      const formattedDate = rawDate
+        ? new Date(rawDate).toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : '';
       return [
         rowIdx++,
         `"${p.tracking_number}"`,
@@ -1275,7 +1324,46 @@ export const AdminSettlementsPage: React.FC = () => {
 
                             {/* Date de livraison */}
                             <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
-                              {item.deliveryDate}
+                              {editingDeliveryDateId === item.id ? (
+                                <div className="flex items-center gap-1.5 bg-white p-1 rounded border shadow-sm">
+                                  <input
+                                    type="date"
+                                    value={tempDeliveryDate}
+                                    onChange={(e) => setTempDeliveryDate(e.target.value)}
+                                    className="text-xs border rounded px-1.5 py-0.5 text-foreground bg-muted/10 focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                  <button
+                                    onClick={() => handleSaveDeliveryDate(item.id)}
+                                    disabled={isUpdating}
+                                    className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 transition"
+                                    title="Enregistrer la date"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingDeliveryDateId(null)}
+                                    disabled={isUpdating}
+                                    className="p-1 rounded bg-muted hover:bg-muted/80 text-foreground transition"
+                                    title="Annuler"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 group">
+                                  <span>{item.deliveryDate}</span>
+                                  <button
+                                    onClick={() => {
+                                      setEditingDeliveryDateId(item.id);
+                                      setTempDeliveryDate(item.rawDeliveryDate || new Date().toISOString().split('T')[0]);
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-muted-foreground hover:text-primary rounded hover:bg-muted"
+                                    title="Modifier la date de livraison"
+                                  >
+                                    <Calendar className="w-3.5 h-3.5 text-[#1B3D87]" />
+                                  </button>
+                                </div>
+                              )}
                             </td>
 
                             {/* Montant (TND) */}

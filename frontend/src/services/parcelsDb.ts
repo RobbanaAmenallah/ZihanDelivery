@@ -195,6 +195,16 @@ export async function getDbParcels(): Promise<{
             status: (row.status as ParcelStatus) || 'pending',
             is_settled: Boolean(row.is_settled),
             settled_at: row.settled_at || null,
+            settlement_method: row.settlement_method || 'especes',
+            settlement_note: row.settlement_note || '',
+            accepted_at: row.accepted_at || null,
+            status_updated_at: row.status_updated_at || null,
+            delivered_at:
+              row.delivered_at ||
+              (row.status === 'delivered'
+                ? row.status_updated_at ||
+                  (row.updated_at && row.updated_at !== row.created_at ? row.updated_at : null)
+                : null),
             notes: row.notes || '',
             created_at: row.created_at || new Date().toISOString(),
             updated_at: row.updated_at,
@@ -345,6 +355,7 @@ export async function updateDbParcel(
   const now = new Date().toISOString();
   let computedAcceptedAt: string | null | undefined = undefined;
   let computedStatusUpdatedAt: string | null | undefined = undefined;
+  let computedDeliveredAt: string | null | undefined = undefined;
 
   if (payload.status !== undefined) {
     // accepted_at : enregistré une seule fois lors du premier passage en accepted/assigned
@@ -358,6 +369,10 @@ export async function updateDbParcel(
     if (payload.status !== 'pending') {
       computedStatusUpdatedAt = payload.status_updated_at ?? now;
     }
+    // delivered_at : date de livraison réelle enregistrée lors du passage en livré
+    if (payload.status === 'delivered') {
+      computedDeliveredAt = payload.delivered_at ?? payload.status_updated_at ?? now;
+    }
   }
   // Valeurs manuelles explicites (admin corrige une date)
   if (payload.accepted_at !== undefined && computedAcceptedAt === undefined) {
@@ -365,6 +380,9 @@ export async function updateDbParcel(
   }
   if (payload.status_updated_at !== undefined && computedStatusUpdatedAt === undefined) {
     computedStatusUpdatedAt = payload.status_updated_at;
+  }
+  if (payload.delivered_at !== undefined && computedDeliveredAt === undefined) {
+    computedDeliveredAt = payload.delivered_at;
   }
 
   if (isConfigured) {
@@ -410,6 +428,7 @@ export async function updateDbParcel(
       // Timestamps calculés en dehors du bloc
       if (computedAcceptedAt !== undefined) updateData.accepted_at = computedAcceptedAt;
       if (computedStatusUpdatedAt !== undefined) updateData.status_updated_at = computedStatusUpdatedAt;
+      if (computedDeliveredAt !== undefined) updateData.delivered_at = computedDeliveredAt;
 
       // 6. Règlement (Settlement)
       if (payload.is_settled !== undefined) {
@@ -455,6 +474,7 @@ export async function updateDbParcel(
         // Timestamps calculés (écrasent les éventuelles valeurs dans payload)
         ...(computedAcceptedAt !== undefined ? { accepted_at: computedAcceptedAt } : {}),
         ...(computedStatusUpdatedAt !== undefined ? { status_updated_at: computedStatusUpdatedAt } : {}),
+        ...(computedDeliveredAt !== undefined ? { delivered_at: computedDeliveredAt } : {}),
         goods_amount: gAmount,
         delivery_fee: dFee,
         total_amount: tAmount,
@@ -540,3 +560,25 @@ export function parcelToDeliveryNoteData(parcel: Parcel): DeliveryNoteData {
     notes: parcel.notes,
   };
 }
+
+/**
+ * Retourne la date/heure réelle de livraison d'un colis.
+ * Priorités :
+ * 1. delivered_at (date explicite enregistrée lors de la livraison)
+ * 2. status_updated_at (date de mise à jour du statut en livré)
+ * 3. updated_at (si différent de created_at, correspond au passage en statut livré)
+ * 4. settled_at (date de règlement, postérieure ou égale à la livraison)
+ * 5. created_at (en dernier recours uniquement)
+ */
+export function getParcelDeliveryDate(parcel: Parcel): string {
+  if (parcel.delivered_at) return parcel.delivered_at;
+  if (parcel.status === 'delivered') {
+    if (parcel.status_updated_at) return parcel.status_updated_at;
+    if (parcel.updated_at && parcel.updated_at !== parcel.created_at) {
+      return parcel.updated_at;
+    }
+    if (parcel.settled_at) return parcel.settled_at;
+  }
+  return parcel.created_at;
+}
+

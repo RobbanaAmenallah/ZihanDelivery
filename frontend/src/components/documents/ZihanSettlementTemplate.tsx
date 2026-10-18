@@ -9,6 +9,7 @@ export interface SettlementParcelItem {
   recipientPhone?: string;
   recipientGovernorate?: string;
   deliveryDate: string;
+  rawDeliveryDate?: string;
   goodsAmount: number; // Montant TND
   isSettled: boolean;
   settledAt?: string | null;
