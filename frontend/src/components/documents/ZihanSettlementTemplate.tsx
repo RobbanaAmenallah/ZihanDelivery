@@ -57,18 +57,11 @@ const BORDER = '#CBD5E1';
 const BG = '#F8FAFC';
 
 export const ZihanSettlementTemplate: React.FC<ZihanSettlementTemplateProps> = ({ data }) => {
-  const methodLabel =
-    data.settlementMethod === 'cheque'
-      ? 'Chèque bancaire'
-      : data.settlementMethod === 'especes'
-      ? 'Espèces (Cash)'
-      : data.settlementMethod || 'Espèces';
-
   return (
     <div
       style={{
         width: '210mm',
-        minHeight: '297mm',
+        minHeight: '270mm',
         padding: '16mm 18mm',
         backgroundColor: '#FFFFFF',
         fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif",
@@ -140,18 +133,12 @@ export const ZihanSettlementTemplate: React.FC<ZihanSettlementTemplateProps> = (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '10px' }}>
             <div>
               <span style={{ color: LIGHT }}>Mode de règlement :</span>
-              <div style={{ fontWeight: 700, color: DARK, fontSize: '11px' }}>{methodLabel}</div>
+              <div style={{ fontWeight: 800, color: DARK, fontSize: '11px' }}>Espèces (Cash) 💵</div>
             </div>
             <div>
               <span style={{ color: LIGHT }}>Date de règlement :</span>
               <div style={{ fontWeight: 700, color: DARK, fontSize: '11px' }}>{data.settlementDate}</div>
             </div>
-            {data.settlementReference && (
-              <div style={{ gridColumn: 'span 2' }}>
-                <span style={{ color: LIGHT }}>Réf / N° Chèque :</span>
-                <div style={{ fontWeight: 700, color: BLUE }}>{data.settlementReference}</div>
-              </div>
-            )}
           </div>
 
           <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px dashed ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -308,7 +295,7 @@ export const ZihanSettlementTemplate: React.FC<ZihanSettlementTemplateProps> = (
             Signature & Décharge du Client / Bénéficiaire :
           </div>
           <div style={{ fontSize: '9px', color: LIGHT, marginTop: '2px' }}>
-            Reconnaît avoir reçu le montant total de {data.totalSettledAmount.toFixed(3)} TND en {methodLabel}.
+            Reconnaît avoir reçu le montant total de {data.totalSettledAmount.toFixed(3)} TND en Espèces (Cash).
           </div>
         </div>
 

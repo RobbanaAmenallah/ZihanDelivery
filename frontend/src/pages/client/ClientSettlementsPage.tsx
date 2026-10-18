@@ -12,13 +12,15 @@ import {
   Calendar,
   CreditCard,
   DollarSign,
+  PackageCheck,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDbParcels } from '@/services/parcelsDb';
+import { getDbParcels, isParcelForClient } from '@/services/parcelsDb';
 import type { Parcel } from '@/types';
 import {
   SettlementViewerModal,
@@ -30,7 +32,7 @@ import type {
 } from '@/components/documents/ZihanSettlementTemplate';
 
 export const ClientSettlementsPage: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -44,6 +46,7 @@ export const ClientSettlementsPage: React.FC = () => {
 
   // Modal Bordereau Official State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [customPrintData, setCustomPrintData] = useState<ClientSettlementData | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -61,20 +64,15 @@ export const ClientSettlementsPage: React.FC = () => {
     loadData();
   }, [loadData]);
 
-  // Delivered parcels strictly belonging to this client
+  // Delivered parcels strictly belonging to this authenticated client only
   const clientDeliveredParcels = useMemo(() => {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
     return parcels.filter((p) => {
-      // Must belong to this client
-      if (profile) {
-        const matchId = p.sender_id && p.sender_id === profile.id;
-        const matchName =
-          p.sender_name &&
-          ((profile.company_name && p.sender_name.toLowerCase().includes(profile.company_name.toLowerCase())) ||
-            (profile.full_name && p.sender_name.toLowerCase().includes(profile.full_name.toLowerCase())));
-        if (!matchId && !matchName) return false;
+      // Strict client isolation: only parcels belonging to this client profile
+      if (!isParcelForClient(p, profile, user?.id)) {
+        return false;
       }
 
       // Must be delivered
@@ -117,56 +115,51 @@ export const ClientSettlementsPage: React.FC = () => {
 
       return true;
     });
-  }, [parcels, profile, searchQuery, settlementFilter, periodFilter]);
+  }, [parcels, profile, user?.id, searchQuery, settlementFilter, periodFilter]);
 
-  // Aggregate stats
+  // Aggregate stats with Reste à percevoir
   const stats = useMemo(() => {
+    let totalDelivered = 0;
     let totalSettled = 0;
-    let totalPending = 0;
     let settledCount = 0;
     let pendingCount = 0;
 
     clientDeliveredParcels.forEach((p) => {
       const amount = Number(p.goods_amount || 0);
+      totalDelivered += amount;
       if (p.is_settled) {
         totalSettled += amount;
         settledCount++;
       } else {
-        totalPending += amount;
         pendingCount++;
       }
     });
 
+    const remainingAmount = totalDelivered - totalSettled;
+
     return {
+      totalDelivered,
       totalSettled,
-      totalPending,
+      remainingAmount,
       totalCount: clientDeliveredParcels.length,
       settledCount,
       pendingCount,
-      totalOverallAmount: totalSettled + totalPending,
     };
   }, [clientDeliveredParcels]);
 
-  // Latest settlement info found in parcels
-  const latestSettlementInfo = useMemo(() => {
+  // Latest settlement date recorded
+  const latestSettlementDate = useMemo(() => {
     const settledParcels = clientDeliveredParcels.filter((p) => p.is_settled && p.settled_at);
     if (settledParcels.length === 0) {
-      return {
-        method: 'Espèces',
-        date: new Date().toLocaleDateString('fr-FR'),
-      };
+      return new Date().toLocaleDateString('fr-FR');
     }
-    // Pick the most recent settled parcel
     const sorted = [...settledParcels].sort((a, b) =>
       (b.settled_at || '').localeCompare(a.settled_at || '')
     );
     const latest = sorted[0];
-    return {
-      method: latest.settlement_method === 'cheque' ? 'Chèque bancaire' : 'Espèces',
-      date: latest.settled_at
-        ? new Date(latest.settled_at).toLocaleDateString('fr-FR')
-        : new Date().toLocaleDateString('fr-FR'),
-    };
+    return latest.settled_at
+      ? new Date(latest.settled_at).toLocaleDateString('fr-FR')
+      : new Date().toLocaleDateString('fr-FR');
   }, [clientDeliveredParcels]);
 
   // Group delivered parcels by Day / Date
@@ -218,7 +211,7 @@ export const ClientSettlementsPage: React.FC = () => {
           goodsAmount: gAmount,
           isSettled: Boolean(p.is_settled),
           settledAt: p.settled_at,
-          settlementMethod: p.settlement_method,
+          settlementMethod: 'especes',
         };
       });
 
@@ -293,7 +286,7 @@ export const ClientSettlementsPage: React.FC = () => {
         `"${formattedDate}"`,
         (Number(p.goods_amount) || 0).toFixed(3),
         p.is_settled ? 'RÉGLÉ' : 'EN ATTENTE',
-        p.settlement_method || '',
+        'Espèces',
         p.settled_at ? new Date(p.settled_at).toLocaleDateString('fr-FR') : '',
       ].join(';');
     });
@@ -308,13 +301,13 @@ export const ClientSettlementsPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Prepare Settlement Data for PDF Modal
+  // Base Settlement Data for PDF Modal (Full Period)
   const modalSettlementData: ClientSettlementData = useMemo(() => {
     const clientName = profile?.company_name || profile?.full_name || 'Mon Compte';
     return {
       settlementNumber: `BDR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-      settlementDate: latestSettlementInfo.date,
-      settlementMethod: latestSettlementInfo.method.toLowerCase().includes('chèque') ? 'cheque' : 'especes',
+      settlementDate: latestSettlementDate,
+      settlementMethod: 'especes',
       client: {
         name: clientName,
         company: profile?.company_name || clientName,
@@ -325,11 +318,85 @@ export const ClientSettlementsPage: React.FC = () => {
         governorate: profile?.governorate || '',
       },
       totalSettledAmount: stats.totalSettled,
-      totalPendingAmount: stats.totalPending,
+      totalPendingAmount: stats.remainingAmount,
       totalDeliveredCount: stats.totalCount,
       groups: groupedByDay,
     };
-  }, [profile, latestSettlementInfo, stats, groupedByDay]);
+  }, [profile, latestSettlementDate, stats, groupedByDay]);
+
+  // ─── ACTION D'IMPRESSION D'UN SEUL JOUR SPÉCIFIQUE ────────────────────────────
+  const handlePrintDay = (grp: DaySettlementGroup) => {
+    const clientName = profile?.company_name || profile?.full_name || 'Mon Compte';
+    const daySettled = grp.items.filter((i) => i.isSettled).reduce((acc, i) => acc + i.goodsAmount, 0);
+    const dayPending = grp.items.filter((i) => !i.isSettled).reduce((acc, i) => acc + i.goodsAmount, 0);
+
+    const dayData: ClientSettlementData = {
+      settlementNumber: `BDR-${grp.date.replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
+      settlementDate: new Date(grp.date).toLocaleDateString('fr-FR'),
+      settlementMethod: 'especes',
+      client: {
+        name: clientName,
+        company: profile?.company_name || clientName,
+        phone: profile?.phone || '—',
+        email: profile?.email || '',
+        address: profile?.address || '',
+        city: profile?.city || '',
+        governorate: profile?.governorate || '',
+      },
+      totalSettledAmount: daySettled > 0 ? daySettled : grp.totalDayAmount,
+      totalPendingAmount: dayPending,
+      totalDeliveredCount: grp.parcelsCount,
+      groups: [grp],
+    };
+
+    setCustomPrintData(dayData);
+    setIsModalOpen(true);
+  };
+
+  // ─── ACTION D'IMPRESSION DES COLIS EN ATTENTE UNIQUEMENT ────────────────────────
+  const handlePrintPendingOnly = () => {
+    const clientName = profile?.company_name || profile?.full_name || 'Mon Compte';
+    const pendingGroups = groupedByDay
+      .map((grp) => {
+        const pendingItems = grp.items.filter((i) => !i.isSettled);
+        if (pendingItems.length === 0) return null;
+        return {
+          ...grp,
+          items: pendingItems,
+          parcelsCount: pendingItems.length,
+          totalDayAmount: pendingItems.reduce((acc, i) => acc + i.goodsAmount, 0),
+          isAllSettled: false,
+        };
+      })
+      .filter((g): g is DaySettlementGroup => g !== null);
+
+    if (pendingGroups.length === 0) {
+      alert('Aucun colis en attente de versement.');
+      return;
+    }
+
+    const pendingData: ClientSettlementData = {
+      settlementNumber: `BDR-ATT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      settlementDate: new Date().toLocaleDateString('fr-FR'),
+      settlementMethod: 'especes',
+      client: {
+        name: clientName,
+        company: profile?.company_name || clientName,
+        phone: profile?.phone || '—',
+        email: profile?.email || '',
+        address: profile?.address || '',
+        city: profile?.city || '',
+        governorate: profile?.governorate || '',
+      },
+      totalSettledAmount: stats.remainingAmount,
+      totalPendingAmount: 0,
+      totalDeliveredCount: stats.pendingCount,
+      groups: pendingGroups,
+    };
+
+    setCustomPrintData(pendingData);
+    setIsModalOpen(true);
+  };
 
   return (
     <div className="space-y-6 pb-12">
@@ -339,14 +406,14 @@ export const ClientSettlementsPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
               <Banknote className="h-7 w-7 text-[#1B3D87]" />
-              Bordereau de Règlement
+              Mon Bordereau de Règlement
             </h1>
             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-              Fonds Encaissés
+              Espace Client
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Consultez le relevé des fonds perçus sur vos colis livrés, les montants reversés et les sommes par jour.
+            Consultez le relevé de vos fonds perçus (COD), le montant déjà reçu en <strong>Espèces</strong> et le <strong>reste à percevoir</strong>.
           </p>
         </div>
 
@@ -368,9 +435,26 @@ export const ClientSettlementsPage: React.FC = () => {
           >
             Export Excel
           </Button>
+
+          {stats.remainingAmount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrintPendingOnly}
+              leftIcon={<FileText className="h-4 w-4 text-amber-600" />}
+              className="border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100"
+              title="Télécharger / Imprimer uniquement mes colis en attente"
+            >
+              PDF En Attente ({stats.remainingAmount.toFixed(3)} DT)
+            </Button>
+          )}
+
           <Button
             size="sm"
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setCustomPrintData(null);
+              setIsModalOpen(true);
+            }}
             leftIcon={<Printer className="h-4 w-4" />}
             className="bg-[#1B3D87] hover:bg-[#152e66] text-white"
           >
@@ -379,52 +463,106 @@ export const ClientSettlementsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ── BANNIÈRE RESTE À PERCEVOIR ── */}
+      {stats.remainingAmount > 0 ? (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500 text-white shadow-xs">
+              <Clock className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-amber-900 flex items-center gap-2">
+                <span>Reste à Percevoir sur vos Colis Livrés :</span>
+                <Badge className="bg-amber-600 text-white font-black text-xs px-2 py-0.5">
+                  {stats.remainingAmount.toFixed(3)} TND
+                </Badge>
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5">
+                {stats.pendingCount} colis livrés en cours de reversement en Espèces par ZIHAN DELIVERY.
+              </p>
+            </div>
+          </div>
+          <div className="text-xs font-semibold text-amber-900 bg-white/80 px-3 py-1.5 rounded-lg border border-amber-200">
+            Fonds garantis • Versement en Espèces
+          </div>
+        </div>
+      ) : (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          <div className="text-xs font-semibold">
+            Tous vos colis livrés sur cette période sont intégralement <strong>réglés (Reste : 0.000 TND)</strong>.
+          </div>
+        </div>
+      )}
+
       {/* ── SECTION 1 : INFORMATIONS DE RÈGLEMENT ── */}
       <Card className="border-[#1B3D87]/20 shadow-sm bg-gradient-to-br from-white to-blue-50/20">
         <CardHeader className="pb-3 border-b border-border/50">
           <CardTitle className="text-base font-bold text-[#1B3D87] flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-emerald-600" />
-            Informations de Règlement
+            Informations de Règlement Client
           </CardTitle>
           <CardDescription>
-            Récapitulatif de vos reversements et moyens de paiement utilisés par ZIHAN DELIVERY.
+            Boutique : <strong>{profile?.company_name || profile?.full_name || 'Mon Compte'}</strong> • Relevé de vos versements
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            {/* 1. Mode de règlement */}
             <div className="p-3 bg-white rounded-lg border">
               <div className="text-xs text-muted-foreground font-semibold uppercase flex items-center gap-1.5 mb-1">
                 <CreditCard className="h-4 w-4 text-[#1B3D87]" />
                 Mode de règlement
               </div>
-              <div className="text-lg font-black text-foreground">
-                {latestSettlementInfo.method}
+              <div className="text-base font-black text-foreground">
+                Espèces (Cash) 💵
               </div>
-              <div className="text-xs text-muted-foreground mt-0.5">Chèque bancaire ou Espèces</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">Reversement en main propre</div>
             </div>
 
+            {/* 2. Date de règlement */}
             <div className="p-3 bg-white rounded-lg border">
               <div className="text-xs text-muted-foreground font-semibold uppercase flex items-center gap-1.5 mb-1">
                 <Calendar className="h-4 w-4 text-[#1B3D87]" />
-                Date de règlement
+                Dernière date
               </div>
-              <div className="text-lg font-black text-foreground">
-                {latestSettlementInfo.date}
+              <div className="text-base font-black text-foreground">
+                {latestSettlementDate}
               </div>
-              <div className="text-xs text-muted-foreground mt-0.5">Dernière date enregistrée</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">Dernier versement enregistré</div>
             </div>
 
+            {/* 3. Déjà réglé */}
             <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
               <div className="text-xs text-emerald-800 font-semibold uppercase flex items-center gap-1.5 mb-1">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                Montant Total Réglé
+                Déjà Réglé (Reçu)
               </div>
-              <div className="text-2xl font-black text-emerald-700">
+              <div className="text-xl font-black text-emerald-700">
                 {stats.totalSettled.toFixed(3)}{' '}
                 <span className="text-xs font-normal text-emerald-800">TND</span>
               </div>
-              <div className="text-xs text-emerald-700 mt-0.5">
-                Argent déjà encaissé et remis ({stats.settledCount} colis)
+              <div className="text-[11px] text-emerald-700 mt-0.5">
+                {stats.settledCount} colis encaissés
+              </div>
+            </div>
+
+            {/* 4. LE RESTE */}
+            <div className={`p-3 rounded-lg border ${
+              stats.remainingAmount > 0
+                ? 'bg-amber-50 border-amber-300'
+                : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="text-xs font-semibold uppercase flex items-center gap-1.5 mb-1 text-amber-800">
+                <Clock className="h-4 w-4 text-amber-600" />
+                Reste à Percevoir
+              </div>
+              <div className="text-xl font-black text-amber-700">
+                {stats.remainingAmount.toFixed(3)}{' '}
+                <span className="text-xs font-normal text-amber-800">TND</span>
+              </div>
+              <div className="text-[11px] text-amber-800 font-medium mt-0.5">
+                {stats.pendingCount} colis à verser
               </div>
             </div>
           </div>
@@ -433,19 +571,40 @@ export const ClientSettlementsPage: React.FC = () => {
 
       {/* ── KPI STATS CARDS ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Total Colis Livrés */}
+        <Card className="border-l-4 border-l-[#1B3D87] shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Total Colis Livrés (Période)
+              </p>
+              <div className="text-2xl font-black text-foreground mt-1">
+                {stats.totalCount}{' '}
+                <span className="text-xs font-normal text-muted-foreground">colis</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Valeur marchandise : <strong>{stats.totalDelivered.toFixed(3)} TND</strong>
+              </p>
+            </div>
+            <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center text-[#1B3D87]">
+              <PackageCheck className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Total réglé */}
         <Card className="border-l-4 border-l-emerald-600 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Total Réglé (Reçu)
+                Montant Déjà Réglé
               </p>
               <div className="text-2xl font-black text-emerald-700 mt-1">
                 {stats.totalSettled.toFixed(3)}{' '}
                 <span className="text-xs font-normal text-muted-foreground">TND</span>
               </div>
               <p className="text-xs text-emerald-600 font-medium mt-0.5">
-                {stats.settledCount} colis encaissés
+                {stats.settledCount} colis déjà reversés en espèces
               </p>
             </div>
             <div className="h-12 w-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
@@ -454,43 +613,28 @@ export const ClientSettlementsPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* En attente */}
-        <Card className="border-l-4 border-l-amber-500 shadow-sm">
+        {/* Reste à régler */}
+        <Card className={`border-l-4 shadow-sm ${
+          stats.remainingAmount > 0 ? 'border-l-amber-500 bg-amber-50/20' : 'border-l-emerald-500'
+        }`}>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                En Attente de Versement
+                Reste à Percevoir (Reste)
               </p>
-              <div className="text-2xl font-black text-amber-600 mt-1">
-                {stats.totalPending.toFixed(3)}{' '}
+              <div className={`text-2xl font-black mt-1 ${
+                stats.remainingAmount > 0 ? 'text-amber-600' : 'text-emerald-700'
+              }`}>
+                {stats.remainingAmount.toFixed(3)}{' '}
                 <span className="text-xs font-normal text-muted-foreground">TND</span>
               </div>
-              <p className="text-xs text-amber-700 font-medium mt-0.5">
-                {stats.pendingCount} colis livrés en cours de reversement
-              </p>
-            </div>
-            <div className="h-12 w-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
-              <Clock className="h-6 w-6" />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Total Colis Livrés */}
-        <Card className="border-l-4 border-l-[#1B3D87] shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Total Colis Livrés
-              </p>
-              <div className="text-2xl font-black text-foreground mt-1">
-                {stats.totalCount}{' '}
-                <span className="text-xs font-normal text-muted-foreground">colis</span>
-              </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Total marchandise : {stats.totalOverallAmount.toFixed(3)} TND
+                {stats.pendingCount} colis restant à verser
               </p>
             </div>
-            <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center text-[#1B3D87]">
+            <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${
+              stats.remainingAmount > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-700'
+            }`}>
               <Banknote className="h-6 w-6" />
             </div>
           </CardContent>
@@ -600,14 +744,14 @@ export const ClientSettlementsPage: React.FC = () => {
         <div className="flex items-center justify-between border-b pb-2">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-[#1B3D87] tracking-tight">
-              1. Colis Livrés & Sommes par Jour et Date
+              1. Colis Livrés &amp; Sommes par Jour et Date
             </h2>
             <Badge variant="secondary" className="font-semibold">
               {groupedByDay.length} date(s)
             </Badge>
           </div>
           <span className="text-xs text-muted-foreground">
-            Cliquez sur <strong>« Afficher détails »</strong> pour voir vos colis livrés de chaque date
+            Cliquez sur <strong>« PDF du jour »</strong> pour imprimer une journée spécifique, ou <strong>« Afficher détails »</strong> pour examiner les colis.
           </span>
         </div>
 
@@ -652,7 +796,7 @@ export const ClientSettlementsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     {/* Somme par jour et date */}
                     <div className="text-right">
                       <div className="text-xs text-muted-foreground font-medium">Somme du jour</div>
@@ -675,6 +819,21 @@ export const ClientSettlementsPage: React.FC = () => {
                       )}
                     </div>
 
+                    {/* Bouton PDF du jour */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrintDay(grp);
+                      }}
+                      className="text-xs font-semibold gap-1.5 border-slate-300 text-slate-700 bg-white hover:bg-slate-100"
+                      title="Imprimer / Télécharger uniquement cette journée"
+                    >
+                      <Printer className="h-3.5 w-3.5 text-[#1B3D87]" />
+                      <span>PDF du jour</span>
+                    </Button>
+
                     {/* Bouton Afficher détails */}
                     <Button
                       variant="outline"
@@ -687,7 +846,7 @@ export const ClientSettlementsPage: React.FC = () => {
                     >
                       {isExpanded ? (
                         <>
-                          Masquer détails <ChevronUp className="h-3.5 w-3.5" />
+                          Masquer <ChevronUp className="h-3.5 w-3.5" />
                         </>
                       ) : (
                         <>
@@ -755,7 +914,7 @@ export const ClientSettlementsPage: React.FC = () => {
                             <td className="py-2.5 px-3 text-center">
                               {item.isSettled ? (
                                 <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] font-bold">
-                                  ✓ Réglé ({item.settlementMethod || 'Espèces'})
+                                  ✓ Réglé (Espèces)
                                 </Badge>
                               ) : (
                                 <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] font-bold">
@@ -791,8 +950,11 @@ export const ClientSettlementsPage: React.FC = () => {
       {/* ── MODAL D'IMPRESSION DU BORDEREAU OFFICIEL ── */}
       <SettlementViewerModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        settlementData={modalSettlementData}
+        onClose={() => {
+          setIsModalOpen(false);
+          setCustomPrintData(null);
+        }}
+        settlementData={customPrintData || modalSettlementData}
       />
     </div>
   );
