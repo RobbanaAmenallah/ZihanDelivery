@@ -372,6 +372,9 @@ export async function updateDbParcel(
     // delivered_at : date de livraison réelle enregistrée lors du passage en livré
     if (payload.status === 'delivered') {
       computedDeliveredAt = payload.delivered_at ?? payload.status_updated_at ?? now;
+      if (!computedStatusUpdatedAt) {
+        computedStatusUpdatedAt = computedDeliveredAt;
+      }
     }
   }
   // Valeurs manuelles explicites (admin corrige une date)
@@ -381,8 +384,9 @@ export async function updateDbParcel(
   if (payload.status_updated_at !== undefined && computedStatusUpdatedAt === undefined) {
     computedStatusUpdatedAt = payload.status_updated_at;
   }
-  if (payload.delivered_at !== undefined && computedDeliveredAt === undefined) {
-    computedDeliveredAt = payload.delivered_at;
+  if (payload.delivered_at !== undefined) {
+    if (computedDeliveredAt === undefined) computedDeliveredAt = payload.delivered_at;
+    if (computedStatusUpdatedAt === undefined) computedStatusUpdatedAt = payload.delivered_at;
   }
 
   if (isConfigured) {
@@ -449,7 +453,37 @@ export async function updateDbParcel(
         }
       }
 
-      await client.from('parcels').update(updateData).eq('id', parcelId);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parcelId);
+      const performUpdate = async (dataToUpdate: Record<string, unknown>) => {
+        return isUuid
+          ? client.from('parcels').update(dataToUpdate).eq('id', parcelId)
+          : client.from('parcels').update(dataToUpdate).eq('tracking_number', parcelId);
+      };
+
+      const { error: primaryError } = await performUpdate(updateData);
+
+      // Si erreur Supabase (ex: colonnes inexistantes delivered_at, settlement_method...), repli automatique
+      if (primaryError) {
+        console.warn('Supabase update warning, tentative repli sans colonnes optionnelles:', primaryError.message);
+        const safeData = { ...updateData };
+        delete safeData.delivered_at;
+        delete safeData.settlement_method;
+        delete safeData.settlement_note;
+
+        const { error: fallbackError } = await performUpdate(safeData);
+        if (fallbackError) {
+          console.warn('Supabase update fallback 1 warning, repli colonnes standard:', fallbackError.message);
+          delete safeData.status_updated_at;
+          delete safeData.accepted_at;
+          delete safeData.is_settled;
+          delete safeData.settled_at;
+
+          const { error: coreError } = await performUpdate(safeData);
+          if (coreError) {
+            console.error('Erreur finale Supabase update parcel:', coreError.message);
+          }
+        }
+      }
     } catch (err) {
       console.error('Erreur update Supabase parcel:', err);
     }
