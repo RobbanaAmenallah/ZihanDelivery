@@ -136,7 +136,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     >
       <div className="space-y-4">
         {/* Document Type Selector Tabs */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 pb-3">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 pb-3 no-print">
           <Button
             size="sm"
             variant={docType === 'delivery_note' ? 'default' : 'outline'}
@@ -161,7 +161,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         {/* Scaled Preview Frame */}
         <div className="max-h-[58vh] overflow-y-auto overflow-x-auto bg-slate-200/80 dark:bg-slate-950 p-2 sm:p-4 rounded-xl flex justify-center border border-border">
           <div className="w-full max-w-[794px] overflow-x-auto flex justify-center">
-            <div ref={printRef} className="origin-top bg-white shadow-md">
+            <div ref={printRef} className="origin-top bg-white shadow-md printable-document">
               {docType === 'delivery_note' && <ZihanDeliveryNoteTemplate data={deliveryNoteData} />}
               {docType === 'label' && <ZihanShippingLabelTemplate data={activeLabelData} />}
             </div>

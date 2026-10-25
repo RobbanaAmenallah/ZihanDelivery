@@ -575,9 +575,15 @@ export function parcelToDeliveryNoteData(parcel: Parcel): DeliveryNoteData {
       phone: parcel.recipient_phone,
       secondaryPhone: parcel.recipient_secondary_phone,
       address: parcel.recipient_address,
-      city: parcel.recipient_delegation || parcel.recipient_governorate,
+      city:
+        parcel.recipient_delegation && parcel.recipient_delegation !== 'Nouvelle Médina'
+          ? parcel.recipient_delegation
+          : '',
       governorate: parcel.recipient_governorate,
-      postalCode: parcel.recipient_postal_code || '',
+      postalCode:
+        parcel.recipient_postal_code && parcel.recipient_postal_code !== '2063'
+          ? parcel.recipient_postal_code
+          : '',
     },
     items: [
       {

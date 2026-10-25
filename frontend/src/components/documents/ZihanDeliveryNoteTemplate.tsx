@@ -62,9 +62,9 @@ export const sampleDeliveryNoteData: DeliveryNoteData = {
     phone: '+216 22 000 000',
     secondaryPhone: '+216 98 111 222',
     address: 'Résidence Ennasr, Bloc B, Apt 14, Avenue Hédi Nouira',
-    city: 'Nouvelle Médina',
+    city: '',
     governorate: 'Ben Arous',
-    postalCode: '2063',
+    postalCode: '',
   },
   items: [
     {
@@ -105,15 +105,23 @@ export const ZihanDeliveryNoteTemplate: React.FC<ZihanDeliveryNoteTemplateProps>
 
   return (
     <div
+      className="zihan-delivery-note-root printable-single-page"
       style={{
         width: '794px',
-        minHeight: '1123px',
+        height: '1118px',
+        maxHeight: '1118px',
         boxSizing: 'border-box',
         backgroundColor: '#ffffff',
         color: DARK,
         fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'space-between',
+        overflow: 'hidden',
+        pageBreakInside: 'avoid',
+        breakInside: 'avoid',
+        pageBreakAfter: 'avoid',
+        breakAfter: 'avoid',
       }}
     >
       {/* ── BANDEAU BLEU ────────────────────────────────────────────────── */}
@@ -164,7 +172,7 @@ export const ZihanDeliveryNoteTemplate: React.FC<ZihanDeliveryNoteTemplateProps>
       <div style={{ height: '4px', backgroundColor: RED, flexShrink: 0 }} />
 
       {/* ── CORPS DU DOCUMENT ──────────────────────────────────────────── */}
-      <div style={{ padding: '20px 30px', display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
+      <div style={{ padding: '16px 28px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
         {/* Entête numéro & code-barres */}
         <div
@@ -362,11 +370,17 @@ export const ZihanDeliveryNoteTemplate: React.FC<ZihanDeliveryNoteTemplateProps>
               📍 {data.recipient.address}
             </p>
             <p style={{ margin: '0 0 8px 0', fontSize: '11px', color: MUTED, fontWeight: 600, lineHeight: 1.5 }}>
-              {data.recipient.city}
-              {data.recipient.governorate && (
-                <> — <span style={{ color: BLUE, fontWeight: 800 }}>{data.recipient.governorate}</span></>
+              {data.recipient.city &&
+                data.recipient.city !== data.recipient.governorate &&
+                !data.recipient.city.toLowerCase().includes('nouvelle m') && (
+                  <>{data.recipient.city} — </>
               )}
-              {data.recipient.postalCode && ` (${data.recipient.postalCode})`}
+              {data.recipient.governorate && (
+                <span style={{ color: BLUE, fontWeight: 800 }}>{data.recipient.governorate}</span>
+              )}
+              {data.recipient.postalCode &&
+                data.recipient.postalCode !== '2063' &&
+                ` (${data.recipient.postalCode})`}
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               <span

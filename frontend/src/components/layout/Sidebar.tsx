@@ -38,6 +38,7 @@ interface NavItem {
 const adminNavItems: NavItem[] = [
   { title: 'Tableau de Bord', href: ROUTES.ADMIN, icon: LayoutDashboard },
   { title: 'Gestion des Colis', href: ROUTES.ADMIN_SHIPMENTS, icon: Package, badge: 'Direct', badgeVariant: 'accent' },
+  { title: 'Gestion des Livreurs', href: ROUTES.ADMIN_DRIVERS, icon: Truck, badge: 'Flotte', badgeVariant: 'primary' },
   { title: 'Facturation Clients', href: ROUTES.ADMIN_INVOICES, icon: Receipt, badge: '50% Retour', badgeVariant: 'accent' },
   { title: 'Règlement', href: ROUTES.ADMIN_SETTLEMENTS, icon: Banknote, badge: 'Bordereau', badgeVariant: 'accent' },
   { title: 'Tarification Clients', href: ROUTES.ADMIN_PRICING, icon: Tag, badge: 'Sur-mesure', badgeVariant: 'accent' },

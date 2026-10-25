@@ -71,9 +71,9 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
     recipientPhone: '',
     recipientSecondaryPhone: '',
     governorate: 'Ben Arous',
-    delegation: 'Nouvelle Médina',
+    delegation: '',
     recipientAddress: '',
-    postalCode: '2063',
+    postalCode: '',
     // Step 3 - Parcel
     description: 'Article Mode & Habillement',
     quantity: 1,
@@ -124,7 +124,7 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
         recipient_secondary_phone: formData.recipientSecondaryPhone,
         recipient_governorate: formData.governorate,
         recipient_delegation: formData.delegation,
-        recipient_address: formData.recipientAddress || 'Nouvelle Médina',
+        recipient_address: formData.recipientAddress,
         recipient_postal_code: formData.postalCode,
         description: formData.description || 'Marchandise',
         quantity: Number(formData.quantity || 1),
@@ -358,7 +358,7 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
                   <p className="font-black text-foreground">{formData.recipientName || 'Mohamed Ben Ali'}</p>
                   <p className="text-muted-foreground">📞 {formData.recipientPhone || '+216 22 000 000'}</p>
                   <p className="text-muted-foreground">
-                    📍 {formData.recipientAddress || 'Nouvelle Médina, Ben Arous'}
+                    📍 {formData.recipientAddress || formData.governorate}
                   </p>
                 </div>
 

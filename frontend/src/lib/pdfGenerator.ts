@@ -57,13 +57,25 @@ export async function downloadElementAsPdf(
       // Standard A4 document (Multi-page slicing so long documents aren't squeezed into 1 page)
       const pxPerPage = Math.floor((canvas.width * pageHeight) / pageWidth);
       const totalPages = Math.ceil(canvas.height / pxPerPage);
+      const overflowPx = canvas.height - pxPerPage;
 
-      if (totalPages <= 1) {
-        const renderHeight = (canvas.height * pageWidth) / canvas.width;
+      // Si le document tient sur 1 page (ou dépasse d'à peine quelques pixels de bordure/police),
+      // ou s'il s'agit d'un bon de commande/livraison unitaire, on le fige strictement sur 1 seule page A4 !
+      const isSinglePageDoc =
+        totalPages <= 1 ||
+        (totalPages === 2 && overflowPx < 180) ||
+        targetElement.classList.contains('printable-single-page') ||
+        Boolean(targetElement.querySelector('.printable-single-page'));
+
+      if (isSinglePageDoc) {
+        const renderHeight = Math.min(pageHeight, (canvas.height * pageWidth) / canvas.width);
         pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, renderHeight, undefined, 'FAST');
       } else {
         for (let i = 0; i < totalPages; i++) {
           const sliceHeight = Math.min(pxPerPage, canvas.height - i * pxPerPage);
+          // Éviter une dernière page blanche si le reliquat est inférieur à 10mm
+          if (i > 0 && sliceHeight < 60) continue;
+
           const pageCanvas = document.createElement('canvas');
           pageCanvas.width = canvas.width;
           pageCanvas.height = sliceHeight;

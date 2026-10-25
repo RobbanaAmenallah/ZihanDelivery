@@ -126,20 +126,72 @@
 /* Print CSS Optimizations for Official Documents */
 @media print {
   @page {
-    size: auto;
+    size: A4 portrait;
     margin: 0;
   }
 
-  body {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
     background: #ffffff !important;
     color: #162033 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide navigation, sidebar, buttons, topbar during document print */
-  header, aside, nav, .no-print, button, .print\\:hidden {
+  /* Hide navigation, sidebar, buttons, topbar, modal overlays, tabs, headers during document print */
+  header,
+  aside,
+  nav,
+  button,
+  .no-print,
+  .print\:hidden,
+  [role="dialog"] > div:first-child,
+  [role="dialog"] > div:last-child:not(.flex-1) {
     display: none !important;
+  }
+
+  /* Remove modal fixed wrapper constraints and backdrops during print */
+  .fixed.inset-0 {
+    position: static !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    display: block !important;
+  }
+
+  /* Hide modal backdrop */
+  .fixed.inset-0 > div.absolute.inset-0 {
+    display: none !important;
+  }
+
+  /* Modal Dialog Card becomes clean unconstrained wrapper */
+  [role="dialog"] {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+  }
+
+  /* Modal body padding reset */
+  [role="dialog"] .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
   }
 
   .print-only {
@@ -151,12 +203,22 @@
     break-after: page;
   }
 
+  /* The actual document to print */
+  .printable-document,
+  .zihan-delivery-note-root,
   .print-document {
     width: 210mm !important;
-    min-height: 297mm !important;
-    padding: 0 !important;
+    max-width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
     margin: 0 auto !important;
+    padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
 }
