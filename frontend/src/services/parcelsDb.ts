@@ -203,7 +203,10 @@ export async function getDbParcels(): Promise<{
               row.delivered_at ||
               (row.status === 'delivered'
                 ? row.status_updated_at ||
-                  (row.updated_at && row.updated_at !== row.created_at ? row.updated_at : null)
+                  (row.updated_at && row.updated_at !== row.created_at ? row.updated_at : null) ||
+                  row.settled_at ||
+                  row.updated_at ||
+                  row.created_at
                 : null),
             notes: row.notes || '',
             created_at: row.created_at || new Date().toISOString(),
@@ -455,9 +458,17 @@ export async function updateDbParcel(
 
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parcelId);
       const performUpdate = async (dataToUpdate: Record<string, unknown>) => {
-        return isUuid
-          ? client.from('parcels').update(dataToUpdate).eq('id', parcelId)
-          : client.from('parcels').update(dataToUpdate).eq('tracking_number', parcelId);
+        if (isUuid) {
+          return client.from('parcels').update(dataToUpdate).eq('id', parcelId);
+        }
+        if (/^ZH\d+/i.test(parcelId)) {
+          return client.from('parcels').update(dataToUpdate).eq('tracking_number', parcelId);
+        }
+        const cached = getLocalCache().find((p) => p.id === parcelId || p.tracking_number === parcelId);
+        if (cached?.tracking_number) {
+          return client.from('parcels').update(dataToUpdate).eq('tracking_number', cached.tracking_number);
+        }
+        return client.from('parcels').update(dataToUpdate).eq('id', parcelId);
       };
 
       const { error: primaryError } = await performUpdate(updateData);
@@ -603,22 +614,39 @@ export function parcelToDeliveryNoteData(parcel: Parcel): DeliveryNoteData {
 
 /**
  * Retourne la date/heure réelle de livraison d'un colis.
+ * Pour tout colis livré, utilise STRICTEMENT la date de livraison effective.
  * Priorités :
  * 1. delivered_at (date explicite enregistrée lors de la livraison)
  * 2. status_updated_at (date de mise à jour du statut en livré)
- * 3. updated_at (si différent de created_at, correspond au passage en statut livré)
- * 4. settled_at (date de règlement, postérieure ou égale à la livraison)
- * 5. created_at (en dernier recours uniquement)
+ * 3. settled_at (date de règlement, postérieure ou égale à la livraison)
+ * 4. updated_at (si disponible et différent de created_at)
+ * 5. updated_at
+ * 6. created_at (en dernier recours uniquement si aucune autre date n'existe)
  */
 export function getParcelDeliveryDate(parcel: Parcel): string {
   if (parcel.delivered_at) return parcel.delivered_at;
   if (parcel.status === 'delivered') {
     if (parcel.status_updated_at) return parcel.status_updated_at;
+    if (parcel.settled_at) return parcel.settled_at;
     if (parcel.updated_at && parcel.updated_at !== parcel.created_at) {
       return parcel.updated_at;
     }
-    if (parcel.settled_at) return parcel.settled_at;
+    if (parcel.updated_at) return parcel.updated_at;
   }
-  return parcel.created_at;
+  return parcel.created_at || '';
+}
+
+/**
+ * Retourne la clé de date au format 'YYYY-MM-DD' en heure locale
+ * afin d'éviter tout décalage horaire UTC dans les regroupements de règlements.
+ */
+export function getParcelLocalDateKey(dateStr?: string | null): string {
+  if (!dateStr) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr.split('T')[0] || '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 

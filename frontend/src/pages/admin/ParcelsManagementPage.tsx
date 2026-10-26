@@ -368,6 +368,7 @@ export const ParcelsManagementPage: React.FC = () => {
     }
 
     setIsUpdating(true);
+    const nowIso = new Date().toISOString();
     const goodsAmount = Number(editForm.goods_amount || 0);
     const deliveryFee = Number(editForm.delivery_fee || 0);
     const totalAmount = Number(editForm.total_amount !== undefined ? editForm.total_amount : goodsAmount + deliveryFee);
@@ -380,6 +381,11 @@ export const ParcelsManagementPage: React.FC = () => {
       quantity: Number(editForm.quantity || 1),
       weight: Number(editForm.weight || 1.0),
     };
+
+    if (editForm.status === 'delivered' && !editingParcel.delivered_at) {
+      updatePayload.delivered_at = nowIso;
+      updatePayload.status_updated_at = nowIso;
+    }
 
     const { error } = await updateDbParcel(editingParcel.id, updatePayload);
     setIsUpdating(false);
@@ -400,6 +406,7 @@ export const ParcelsManagementPage: React.FC = () => {
               quantity: Number(editForm.quantity || 1),
               weight: Number(editForm.weight || 1.0),
               is_fragile: Boolean(editForm.is_fragile),
+              ...(updatePayload.delivered_at ? { delivered_at: updatePayload.delivered_at, status_updated_at: updatePayload.status_updated_at } : {}),
             }
           : p
       )
@@ -411,9 +418,27 @@ export const ParcelsManagementPage: React.FC = () => {
 
   // ── 7. Status Quick Change ──────────────────────────────────────────────────
   const handleStatusChange = async (parcelId: string, newStatus: ParcelStatus) => {
-    await updateDbParcel(parcelId, { status: newStatus });
+    const now = new Date().toISOString();
+    const updatePayload: UpdateParcelPayload = { status: newStatus };
+    if (newStatus === 'delivered') {
+      updatePayload.delivered_at = now;
+      updatePayload.status_updated_at = now;
+    } else if (newStatus !== 'pending') {
+      updatePayload.status_updated_at = now;
+    }
+
+    await updateDbParcel(parcelId, updatePayload);
     setParcels((prev) =>
-      prev.map((p) => (p.id === parcelId ? { ...p, status: newStatus } : p))
+      prev.map((p) =>
+        p.id === parcelId
+          ? {
+              ...p,
+              status: newStatus,
+              ...(newStatus === 'delivered' ? { delivered_at: now, status_updated_at: now } : {}),
+              ...(newStatus !== 'pending' ? { status_updated_at: now } : {}),
+            }
+          : p
+      )
     );
     showToast(`Statut mis à jour : ${newStatus}`);
   };
@@ -1069,8 +1094,8 @@ export const ParcelsManagementPage: React.FC = () => {
                               <span className="text-muted-foreground italic">Non accepté</span>
                             </div>
                           )}
-                          {/* Statut final */}
-                          {parcel.status_updated_at ? (
+                          {/* Statut final / Livraison */}
+                          {(parcel.delivered_at || parcel.status_updated_at || (parcel.status === 'delivered' ? parcel.updated_at : null)) ? (
                             <div className="flex items-start gap-1">
                               <span className={`w-2 h-2 mt-0.5 rounded-full shrink-0 ${
                                 parcel.status === 'delivered' ? 'bg-emerald-500'
@@ -1078,16 +1103,18 @@ export const ParcelsManagementPage: React.FC = () => {
                                 : 'bg-amber-500'
                               }`} />
                               <div>
-                                <span className="text-muted-foreground font-medium block">Mise à jour</span>
+                                <span className="text-muted-foreground font-medium block">
+                                  {parcel.status === 'delivered' ? 'Livré le' : 'Mise à jour'}
+                                </span>
                                 <span className={`font-mono ${
                                   parcel.status === 'delivered' ? 'text-emerald-700 dark:text-emerald-300'
                                   : ['returned', 'refused', 'customer_absent', 'wrong_address', 'failed'].includes(parcel.status) ? 'text-rose-700 dark:text-rose-300'
                                   : 'text-amber-700 dark:text-amber-300'
                                 }`}>
-                                  {new Date(parcel.status_updated_at).toLocaleDateString('fr-FR')}
+                                  {new Date((parcel.delivered_at || parcel.status_updated_at || parcel.updated_at)!).toLocaleDateString('fr-FR')}
                                 </span>
                                 <span className="text-muted-foreground ml-1">
-                                  {new Date(parcel.status_updated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                  {new Date((parcel.delivered_at || parcel.status_updated_at || parcel.updated_at)!).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               </div>
                             </div>

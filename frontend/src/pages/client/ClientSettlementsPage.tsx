@@ -20,7 +20,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDbParcels, isParcelForClient, getParcelDeliveryDate } from '@/services/parcelsDb';
+import { getDbParcels, isParcelForClient, getParcelDeliveryDate, getParcelLocalDateKey } from '@/services/parcelsDb';
 import type { Parcel } from '@/types';
 import {
   SettlementViewerModal,
@@ -67,7 +67,6 @@ export const ClientSettlementsPage: React.FC = () => {
   // Delivered parcels strictly belonging to this authenticated client only
   const clientDeliveredParcels = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
 
     return parcels.filter((p) => {
       // Strict client isolation: only parcels belonging to this client profile
@@ -91,26 +90,34 @@ export const ClientSettlementsPage: React.FC = () => {
       if (settlementFilter === 'settled' && !p.is_settled) return false;
       if (settlementFilter === 'unsettled' && p.is_settled) return false;
 
-      // Filter period (vraie date de livraison)
+      // Filter period (strictement basé sur la vraie date de livraison locale)
       const dDateStr = getParcelDeliveryDate(p);
       if (!dDateStr) return true;
       const dDate = new Date(dDateStr);
+      if (isNaN(dDate.getTime())) return true;
+
+      const nowYear = now.getFullYear();
+      const nowMonth = now.getMonth();
+      const nowDay = now.getDate();
+
+      const dYear = dDate.getFullYear();
+      const dMonth = dDate.getMonth();
+      const dDay = dDate.getDate();
 
       if (periodFilter === 'today') {
-        return dDateStr.startsWith(todayStr);
+        return dYear === nowYear && dMonth === nowMonth && dDay === nowDay;
       }
       if (periodFilter === 'week') {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(now.getDate() - 7);
+        const sevenDaysAgo = new Date(nowYear, nowMonth, nowDay - 7, 0, 0, 0);
         return dDate >= sevenDaysAgo;
       }
       if (periodFilter === 'month') {
-        return dDate.getMonth() === now.getMonth() && dDate.getFullYear() === now.getFullYear();
+        return dYear === nowYear && dMonth === nowMonth;
       }
       if (periodFilter === 'last_month') {
-        const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-        const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-        return dDate.getMonth() === lastMonth && dDate.getFullYear() === lastMonthYear;
+        const lastMonth = nowMonth === 0 ? 11 : nowMonth - 1;
+        const lastMonthYear = nowMonth === 0 ? nowYear - 1 : nowYear;
+        return dYear === lastMonthYear && dMonth === lastMonth;
       }
 
       return true;
@@ -162,13 +169,13 @@ export const ClientSettlementsPage: React.FC = () => {
       : new Date().toLocaleDateString('fr-FR');
   }, [clientDeliveredParcels]);
 
-  // Group delivered parcels by Day / Date
+  // Group delivered parcels by Day / Date (basé strictement sur la vraie date de livraison locale)
   const groupedByDay = useMemo<DaySettlementGroup[]>(() => {
     const groupsMap = new Map<string, Parcel[]>();
 
     clientDeliveredParcels.forEach((p) => {
       const rawDate = getParcelDeliveryDate(p) || new Date().toISOString();
-      const dateKey = rawDate.split('T')[0];
+      const dateKey = getParcelLocalDateKey(rawDate);
 
       if (!groupsMap.has(dateKey)) {
         groupsMap.set(dateKey, []);
@@ -208,7 +215,7 @@ export const ClientSettlementsPage: React.FC = () => {
           recipientPhone: p.recipient_phone,
           recipientGovernorate: p.recipient_governorate,
           deliveryDate: formattedDeliveryDate,
-          rawDeliveryDate: rawDeliveryDate ? rawDeliveryDate.split('T')[0] : dateKey,
+          rawDeliveryDate: rawDeliveryDate ? getParcelLocalDateKey(rawDeliveryDate) : dateKey,
           goodsAmount: gAmount,
           isSettled: Boolean(p.is_settled),
           settledAt: p.settled_at,
@@ -216,7 +223,8 @@ export const ClientSettlementsPage: React.FC = () => {
         };
       });
 
-      const dateObj = new Date(dateKey + 'T12:00:00Z');
+      const [year, month, day] = dateKey.split('-').map(Number);
+      const dateObj = new Date(year, (month || 1) - 1, day || 1, 12, 0, 0);
       const dateLabel = isNaN(dateObj.getTime())
         ? dateKey
         : dateObj.toLocaleDateString('fr-FR', {

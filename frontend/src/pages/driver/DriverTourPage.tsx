@@ -105,10 +105,19 @@ export const DriverTourPage: React.FC = () => {
 
   const handleUpdateStatus = async (newStatus: ParcelStatus) => {
     if (!selectedParcel) return;
+    const now = new Date().toISOString();
 
     setParcels((prev) =>
       prev.map((p) =>
-        p.id === selectedParcel.id ? { ...p, status: newStatus, notes: statusNote || p.notes } : p
+        p.id === selectedParcel.id
+          ? {
+              ...p,
+              status: newStatus,
+              notes: statusNote || p.notes,
+              ...(newStatus === 'delivered' ? { delivered_at: now, status_updated_at: now } : {}),
+              ...(newStatus !== 'pending' ? { status_updated_at: now } : {}),
+            }
+          : p
       )
     );
     setIsStatusModalOpen(false);
@@ -116,6 +125,8 @@ export const DriverTourPage: React.FC = () => {
     await updateDbParcel(selectedParcel.id!, {
       status: newStatus,
       notes: statusNote || selectedParcel.notes,
+      ...(newStatus === 'delivered' ? { delivered_at: now, status_updated_at: now } : {}),
+      ...(newStatus !== 'pending' ? { status_updated_at: now } : {}),
     });
   };
 
