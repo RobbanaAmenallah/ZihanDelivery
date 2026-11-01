@@ -60,7 +60,7 @@ export const AdminSettlementsPage: React.FC = () => {
   const [selectedClientId, setSelectedClientId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [clientTableSearch, setClientTableSearch] = useState<string>('');
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | 'week' | 'month' | 'last_month'>('month');
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | 'week' | 'month' | 'last_month'>('all');
   const [settlementFilter, setSettlementFilter] = useState<'all' | 'settled' | 'unsettled'>('all');
 
   // Settlement Form Controls (Espèces uniquement)
@@ -146,10 +146,12 @@ export const AdminSettlementsPage: React.FC = () => {
   );
 
   // ─── SYNTHÈSE DES RÈGLEMENTS PAR CLIENT (AVEC RESTE À PAYER) ───────────────────
+  // Note: La synthèse client calcule le solde réel de chaque client (indépendamment du filtre de période visuel)
+  // afin que le "Reste à Régler" ne disparaisse jamais au changement de mois ou de semaine.
   const clientSummaries = useMemo<ClientSettlementSummary[]>(() => {
     return clients.map((c) => {
       const clientDelivered = parcels.filter(
-        (p) => p.status === 'delivered' && isParcelForClient(p, c, c.id) && filterByPeriod(p)
+        (p) => p.status === 'delivered' && isParcelForClient(p, c, c.id)
       );
 
       let totalDeliveredAmount = 0;
@@ -180,7 +182,7 @@ export const AdminSettlementsPage: React.FC = () => {
         remainingAmount,
       };
     });
-  }, [clients, parcels, filterByPeriod]);
+  }, [clients, parcels]);
 
   // Filter client summaries for table search
   const filteredClientSummaries = useMemo(() => {

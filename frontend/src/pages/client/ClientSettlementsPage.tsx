@@ -38,7 +38,7 @@ export const ClientSettlementsPage: React.FC = () => {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | 'week' | 'month' | 'last_month'>('month');
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | 'week' | 'month' | 'last_month'>('all');
   const [settlementFilter, setSettlementFilter] = useState<'all' | 'settled' | 'unsettled'>('all');
 
   // Expanded dates state
