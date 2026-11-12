@@ -31,8 +31,8 @@ import {
   updateDbExpense,
   deleteDbExpense,
   EXPENSE_CATEGORIES,
-  COMPANY_VEHICLES,
 } from '@/services/expensesDb';
+import { getSupabaseClient, getActiveSupabaseConfig } from '@/services/supabase';
 import type { CompanyExpense, CreateExpensePayload, ExpenseCategory } from '@/types';
 
 export const AdminExpensesPage: React.FC = () => {
@@ -80,6 +80,25 @@ export const AdminExpensesPage: React.FC = () => {
 
   useEffect(() => {
     loadExpenses();
+
+    const config = getActiveSupabaseConfig();
+    if (config.isConfigured) {
+      const client = getSupabaseClient();
+      const channel = client
+        .channel('realtime_expenses_feed')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'expenses' },
+          () => {
+            loadExpenses();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        client.removeChannel(channel);
+      };
+    }
   }, [loadExpenses]);
 
   const showToast = (msg: string) => {
@@ -87,26 +106,44 @@ export const AdminExpensesPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Liste dynamique des véhicules réels ayant déjà des dépenses
+  const knownVehicles = useMemo(() => {
+    const map = new Map<string, { plate: string; model?: string; driver?: string }>();
+    expenses.forEach((e) => {
+      if (e.vehicle_plate && e.vehicle_plate.trim()) {
+        const p = e.vehicle_plate.trim();
+        if (!map.has(p)) {
+          map.set(p, {
+            plate: p,
+            model: e.vehicle_model || '',
+            driver: e.driver_name || '',
+          });
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [expenses]);
+
   // Quick select company vehicle helper
   const handleVehicleSelect = (plate: string) => {
     setFormVehiclePlate(plate);
-    const found = COMPANY_VEHICLES.find((v) => v.plate === plate);
+    const found = knownVehicles.find((v) => v.plate === plate);
     if (found) {
-      setFormVehicleModel(found.model);
+      if (found.model) setFormVehicleModel(found.model);
       if (found.driver) setFormDriverName(found.driver);
     }
   };
 
-  // Open Add modal
+  // Open Add modal (commence avec un formulaire entièrement vierge pour les vraies dépenses)
   const handleOpenAddModal = () => {
     setEditingExpense(null);
     setFormCategory('gasoil');
     setFormTitle('');
     setFormAmount('');
     setFormDate(new Date().toISOString().split('T')[0]);
-    setFormVehiclePlate(COMPANY_VEHICLES[0]?.plate || '');
-    setFormVehicleModel(COMPANY_VEHICLES[0]?.model || '');
-    setFormDriverName(COMPANY_VEHICLES[0]?.driver || '');
+    setFormVehiclePlate('');
+    setFormVehicleModel('');
+    setFormDriverName('');
     setFormMileage('');
     setFormPaymentMethod('especes');
     setFormReceiptNumber('');
@@ -521,7 +558,7 @@ export const AdminExpensesPage: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {vehicleBreakdown.map(([plate, data]) => {
-              const vMeta = COMPANY_VEHICLES.find((v) => v.plate === plate);
+              const vMeta = knownVehicles.find((v) => v.plate === plate);
               return (
                 <div
                   key={plate}
@@ -589,18 +626,20 @@ export const AdminExpensesPage: React.FC = () => {
           </div>
 
           {/* Véhicule */}
-          <select
-            value={selectedVehicle}
-            onChange={(e) => setSelectedVehicle(e.target.value)}
-            className="text-xs rounded-md border border-input bg-background px-2.5 py-1.5 h-9 font-medium"
-          >
-            <option value="all">🚗 Tous les Véhicules</option>
-            {COMPANY_VEHICLES.map((v) => (
-              <option key={v.plate} value={v.plate}>
-                {v.plate} ({v.model})
-              </option>
-            ))}
-          </select>
+          {knownVehicles.length > 0 && (
+            <select
+              value={selectedVehicle}
+              onChange={(e) => setSelectedVehicle(e.target.value)}
+              className="text-xs rounded-md border border-input bg-background px-2.5 py-1.5 h-9 font-medium"
+            >
+              <option value="all">🚗 Tous les Véhicules</option>
+              {knownVehicles.map((v) => (
+                <option key={v.plate} value={v.plate}>
+                  {v.plate} {v.model ? `(${v.model})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* Période */}
           <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-md text-xs">
@@ -896,24 +935,26 @@ export const AdminExpensesPage: React.FC = () => {
               <span className="text-[10px] text-muted-foreground">Flotte 100% ZIHAN</span>
             </div>
 
-            {/* Quick Vehicle Select */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-muted-foreground font-semibold">Choisir rapidement :</span>
-              {COMPANY_VEHICLES.map((v) => (
-                <button
-                  type="button"
-                  key={v.plate}
-                  onClick={() => handleVehicleSelect(v.plate)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${
-                    formVehiclePlate === v.plate
-                      ? 'bg-[#1B3D87] text-white shadow-xs'
-                      : 'bg-white border text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {v.plate}
-                </button>
-              ))}
-            </div>
+            {/* Quick Vehicle Select from known real vehicles */}
+            {knownVehicles.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-muted-foreground font-semibold">Véhicules enregistrés :</span>
+                {knownVehicles.map((v) => (
+                  <button
+                    type="button"
+                    key={v.plate}
+                    onClick={() => handleVehicleSelect(v.plate)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${
+                      formVehiclePlate === v.plate
+                        ? 'bg-[#1B3D87] text-white shadow-xs'
+                        : 'bg-white border text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {v.plate}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
               <Input

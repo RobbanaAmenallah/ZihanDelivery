@@ -77,101 +77,9 @@ export const EXPENSE_CATEGORIES: ExpenseCategoryMeta[] = [
   },
 ];
 
-export const COMPANY_VEHICLES = [
-  { plate: '215 TUN 4820', model: 'Peugeot Partner', driver: 'Karim Mansouri' },
-  { plate: '228 TUN 7190', model: 'Citroën Berlingo', driver: 'Yassine Gharbi' },
-  { plate: '204 TUN 1588', model: 'Renault Express', driver: 'Nidhal Ben Amor' },
-  { plate: '232 TUN 9310', model: 'Fiat Doblo', driver: 'Bilel Trabelsi' },
-  { plate: '219 TUN 3045', model: 'Dacia Dokker', driver: 'Hamza Ben Salem' },
-];
+export const COMPANY_VEHICLES: { plate: string; model: string; driver?: string }[] = [];
 
-export const INITIAL_SAMPLE_EXPENSES: CompanyExpense[] = [
-  {
-    id: 'exp_1',
-    category: 'gasoil',
-    title: 'Plein Gasoil 50 (52 Litres) - Kiosque Agil',
-    amount: 115.500,
-    date: '2026-11-10',
-    vehicle_plate: '215 TUN 4820',
-    vehicle_model: 'Peugeot Partner',
-    driver_name: 'Karim Mansouri',
-    mileage: 142300,
-    payment_method: 'carte',
-    supplier: 'Kiosque Agil Ben Arous',
-    receipt_number: 'AGIL-88421',
-    notes: 'Tournée Grand Tunis & Banlieue Sud',
-  },
-  {
-    id: 'exp_2',
-    category: 'gasoil',
-    title: 'Gasoil 45L - Shell Mornag',
-    amount: 99.000,
-    date: '2026-11-09',
-    vehicle_plate: '228 TUN 7190',
-    vehicle_model: 'Citroën Berlingo',
-    driver_name: 'Yassine Gharbi',
-    mileage: 89450,
-    payment_method: 'especes',
-    supplier: 'Shell Mornag',
-    receipt_number: 'SH-30491',
-    notes: 'Livraisons Sahel & Nabeul',
-  },
-  {
-    id: 'exp_3',
-    category: 'vidange',
-    title: 'Vidange complète 10 000 km + Filtre à huile & Filtre à air',
-    amount: 145.000,
-    date: '2026-11-06',
-    vehicle_plate: '215 TUN 4820',
-    vehicle_model: 'Peugeot Partner',
-    driver_name: 'Karim Mansouri',
-    mileage: 140000,
-    payment_method: 'especes',
-    supplier: 'Garage Mécanique Express',
-    receipt_number: 'FAC-2026-1102',
-    notes: 'Huile Total 5W40 synthétique',
-  },
-  {
-    id: 'exp_4',
-    category: 'pieces_rechange',
-    title: '2 Pneus Neufs Avant 185/65 R15 + Équilibrage',
-    amount: 320.000,
-    date: '2026-11-04',
-    vehicle_plate: '204 TUN 1588',
-    vehicle_model: 'Renault Express',
-    driver_name: 'Nidhal Ben Amor',
-    mileage: 165200,
-    payment_method: 'virement',
-    supplier: 'Pneumatiques Tunisie',
-    receipt_number: 'BL-99382',
-    notes: 'Remplacement pneus usés pour sécurité flotte',
-  },
-  {
-    id: 'exp_5',
-    category: 'facture_tel',
-    title: 'Facture Téléphonique Flotte Ooredoo (5 Lignes Livreurs + Fibre Bureau)',
-    amount: 215.800,
-    date: '2026-11-02',
-    payment_method: 'virement',
-    supplier: 'Ooredoo Tunisie',
-    receipt_number: 'OOR-NOV-2026',
-    notes: 'Forfaits 4G dispatching & appels clients',
-  },
-  {
-    id: 'exp_6',
-    category: 'entretien',
-    title: 'Changement Plaquettes de Freins Avant + Main d\'œuvre',
-    amount: 95.000,
-    date: '2026-10-28',
-    vehicle_plate: '228 TUN 7190',
-    vehicle_model: 'Citroën Berlingo',
-    driver_name: 'Yassine Gharbi',
-    mileage: 87100,
-    payment_method: 'especes',
-    supplier: 'Auto Pièces Ben Arous',
-    receipt_number: 'REC-5541',
-  },
-];
+export const INITIAL_SAMPLE_EXPENSES: CompanyExpense[] = [];
 
 // ─── Local Cache Helpers ──────────────────────────────────────────────────────
 
@@ -180,20 +88,29 @@ function getLocalExpenses(): CompanyExpense[] {
     const raw = localStorage.getItem(LOCAL_EXPENSES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      if (Array.isArray(parsed)) {
+        // Nettoyer définitivement les éventuelles lignes d'exemple factices
+        const sampleIds = ['exp_1', 'exp_2', 'exp_3', 'exp_4', 'exp_5', 'exp_6'];
+        const realOnly = parsed.filter(
+          (e: CompanyExpense) => !sampleIds.includes(e.id) && !e.id?.startsWith('exp_sample_')
+        );
+        if (realOnly.length !== parsed.length) {
+          localStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(realOnly));
+        }
+        return realOnly;
       }
     }
   } catch { /* ignore */ }
 
-  // Initial seed if empty
-  localStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(INITIAL_SAMPLE_EXPENSES));
-  return INITIAL_SAMPLE_EXPENSES;
+  return [];
 }
 
 function saveLocalExpenses(expenses: CompanyExpense[]) {
   try {
-    localStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(expenses));
+    // Filtrer pour garantir qu'aucune donnée factice n'est stockée
+    const sampleIds = ['exp_1', 'exp_2', 'exp_3', 'exp_4', 'exp_5', 'exp_6'];
+    const clean = expenses.filter((e) => !sampleIds.includes(e.id) && !e.id?.startsWith('exp_sample_'));
+    localStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(clean));
   } catch { /* ignore */ }
 }
 
