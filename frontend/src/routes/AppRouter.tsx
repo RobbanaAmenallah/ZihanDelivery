@@ -13,6 +13,7 @@ import { ClientPricingManagementPage } from '@/pages/admin/ClientPricingManageme
 import { AdminInvoicesPage } from '@/pages/admin/AdminInvoicesPage';
 import { AdminSettlementsPage } from '@/pages/admin/AdminSettlementsPage';
 import { AdminDriversPage } from '@/pages/admin/AdminDriversPage';
+import { AdminExpensesPage } from '@/pages/admin/AdminExpensesPage';
 
 // Client Pages
 import { ClientDashboardPage } from '@/pages/client/ClientDashboardPage';
@@ -60,6 +61,7 @@ const router = createBrowserRouter([
       { path: ROUTES.ADMIN, element: <AdminDashboard /> },
       { path: ROUTES.ADMIN_SHIPMENTS, element: <ParcelsManagementPage /> },
       { path: ROUTES.ADMIN_DRIVERS, element: <AdminDriversPage /> },
+      { path: ROUTES.ADMIN_EXPENSES, element: <AdminExpensesPage /> },
       { path: ROUTES.ADMIN_INVOICES, element: <AdminInvoicesPage /> },
       { path: ROUTES.ADMIN_SETTLEMENTS, element: <AdminSettlementsPage /> },
       { path: ROUTES.ADMIN_PRICING, element: <ClientPricingManagementPage /> },

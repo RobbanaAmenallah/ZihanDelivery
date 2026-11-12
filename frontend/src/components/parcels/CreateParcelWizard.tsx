@@ -253,12 +253,20 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
                   onChange={(e) => setFormData({ ...formData, recipientSecondaryPhone: e.target.value })}
                 />
               </div>
-              <Select
-                label="Gouvernorat *"
-                value={formData.governorate}
-                onChange={(e) => setFormData({ ...formData, governorate: e.target.value })}
-                options={ALL_GOVERNORATES.map((gov) => ({ value: gov, label: gov }))}
-              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Select
+                  label="Gouvernorat *"
+                  value={formData.governorate}
+                  onChange={(e) => setFormData({ ...formData, governorate: e.target.value })}
+                  options={ALL_GOVERNORATES.map((gov) => ({ value: gov, label: gov }))}
+                />
+                <Input
+                  label="Ville *"
+                  placeholder="Ex: Mornag, La Marsa, Nabeul..."
+                  value={formData.delegation}
+                  onChange={(e) => setFormData({ ...formData, delegation: e.target.value })}
+                />
+              </div>
               <Input
                 label="Adresse Complète & Repère *"
                 placeholder="Ex: Résidence Ennasr, Bloc B, Apt 14, Rue..."
@@ -358,7 +366,7 @@ export const CreateParcelWizard: React.FC<CreateParcelWizardProps> = ({
                   <p className="font-black text-foreground">{formData.recipientName || 'Mohamed Ben Ali'}</p>
                   <p className="text-muted-foreground">📞 {formData.recipientPhone || '+216 22 000 000'}</p>
                   <p className="text-muted-foreground">
-                    📍 {formData.recipientAddress || formData.governorate}
+                    📍 {formData.delegation ? `${formData.delegation} — ` : ''}{formData.recipientAddress || formData.governorate}{formData.governorate ? ` (${formData.governorate})` : ''}
                   </p>
                 </div>
 

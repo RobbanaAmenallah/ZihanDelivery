@@ -13,6 +13,7 @@ export const ROUTES = {
   ADMIN_SETTLEMENTS: '/admin/settlements',
   ADMIN_PRICING: '/admin/pricing',
   ADMIN_DRIVERS: '/admin/drivers',
+  ADMIN_EXPENSES: '/admin/expenses',
   ADMIN_CLIENTS: '/admin/clients',
   ADMIN_SETTINGS: '/admin/settings',
   ADMIN_ANALYTICS: '/admin/analytics',

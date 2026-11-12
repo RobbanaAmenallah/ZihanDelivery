@@ -196,3 +196,37 @@ export interface UpdateParcelPayload {
   delivered_at?: string | null;
   notes?: string;
 }
+
+// ─── Dépenses Société & Flotte ──────────────────────────────────────────────────
+
+export type ExpenseCategory =
+  | 'gasoil'
+  | 'vidange'
+  | 'pieces_rechange'
+  | 'entretien'
+  | 'facture_tel'
+  | 'assurance_vignette'
+  | 'salaire_prime'
+  | 'loyer_charges'
+  | 'autre';
+
+export interface CompanyExpense {
+  id: string;
+  category: ExpenseCategory;
+  title: string;
+  amount: number; // en TND
+  date: string; // YYYY-MM-DD
+  vehicle_plate?: string; // Matricule véhicule société (ex: "204 TUN 1588")
+  vehicle_model?: string; // Modèle véhicule (ex: "Peugeot Partner", "Citroën Berlingo")
+  driver_name?: string; // Chauffeur / Livreur concerné
+  mileage?: number; // Kilométrage au compteur
+  payment_method: 'especes' | 'carte' | 'virement' | 'cheque';
+  receipt_number?: string; // N° Bon / Facture
+  supplier?: string; // Fournisseur (Kiosque Agil, Shell, Orange, Ooredoo, etc.)
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type CreateExpensePayload = Omit<CompanyExpense, 'id' | 'created_at' | 'updated_at'>;
+export type UpdateExpensePayload = Partial<CreateExpensePayload>;

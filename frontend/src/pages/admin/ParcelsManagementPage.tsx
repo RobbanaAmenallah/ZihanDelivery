@@ -1449,7 +1449,7 @@ export const ParcelsManagementPage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-3 gap-1.5">
                 <div>
                   <label className="text-[10px] font-bold text-foreground mb-0.5 block">Gouvernorat *</label>
                   <select
@@ -1469,6 +1469,14 @@ export const ParcelsManagementPage: React.FC = () => {
                     </optgroup>
                   </select>
                 </div>
+
+                <Input
+                  label="Ville *"
+                  placeholder="Ex: Mornag, La Marsa..."
+                  value={createForm.recipient_delegation || ''}
+                  onChange={(e) => setCreateForm({ ...createForm, recipient_delegation: e.target.value })}
+                  className="h-8 text-xs px-2 py-0.5"
+                />
 
                 <Input
                   label="Code Postal"

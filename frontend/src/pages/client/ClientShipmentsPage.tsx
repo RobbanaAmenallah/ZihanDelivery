@@ -61,6 +61,7 @@ export const ClientShipmentsPage: React.FC = () => {
     recipient_phone: '',
     recipient_secondary_phone: '',
     recipient_governorate: 'Tunis',
+    recipient_delegation: '',
     recipient_address: '',
     description: '',
     quantity: 1,
@@ -115,6 +116,7 @@ export const ClientShipmentsPage: React.FC = () => {
       recipient_phone: parcel.recipient_phone || '',
       recipient_secondary_phone: parcel.recipient_secondary_phone || '',
       recipient_governorate: parcel.recipient_governorate || 'Tunis',
+      recipient_delegation: parcel.recipient_delegation || '',
       recipient_address: parcel.recipient_address || '',
       description: parcel.description || '',
       quantity: parcel.quantity || 1,
@@ -155,6 +157,7 @@ export const ClientShipmentsPage: React.FC = () => {
         recipient_phone: editForm.recipient_phone,
         recipient_secondary_phone: editForm.recipient_secondary_phone,
         recipient_governorate: editForm.recipient_governorate,
+        recipient_delegation: editForm.recipient_delegation,
         recipient_address: editForm.recipient_address,
         description: editForm.description,
         quantity: Number(editForm.quantity || 1),
@@ -601,24 +604,33 @@ export const ClientShipmentsPage: React.FC = () => {
                   onChange={(e) => setEditForm({ ...editForm, recipient_secondary_phone: e.target.value })}
                   className="h-8 text-xs"
                 />
-                <div>
-                  <label className="text-[10px] font-bold text-foreground mb-0.5 block">Gouvernorat *</label>
-                  <select
-                    value={editForm.recipient_governorate}
-                    onChange={(e) => setEditForm({ ...editForm, recipient_governorate: e.target.value })}
-                    className="w-full h-8 px-2 rounded-lg border border-border bg-background text-xs font-semibold"
-                  >
-                    <optgroup label="Grand Tunis">
-                      {GRAND_TUNIS_GOVERNORATES.map((g) => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Hors Grand Tunis">
-                      {ALL_TUNISIAN_GOVERNORATES.filter((g) => !GRAND_TUNIS_GOVERNORATES.includes(g)).map((g) => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </optgroup>
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-foreground mb-0.5 block">Gouvernorat *</label>
+                    <select
+                      value={editForm.recipient_governorate}
+                      onChange={(e) => setEditForm({ ...editForm, recipient_governorate: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-border bg-background text-xs font-semibold"
+                    >
+                      <optgroup label="Grand Tunis">
+                        {GRAND_TUNIS_GOVERNORATES.map((g) => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Hors Grand Tunis">
+                        {ALL_TUNISIAN_GOVERNORATES.filter((g) => !GRAND_TUNIS_GOVERNORATES.includes(g)).map((g) => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                  <Input
+                    label="Ville"
+                    placeholder="Ex: Mornag, La Marsa..."
+                    value={editForm.recipient_delegation || ''}
+                    onChange={(e) => setEditForm({ ...editForm, recipient_delegation: e.target.value })}
+                    className="h-8 text-xs"
+                  />
                 </div>
                 <Input
                   label="Adresse Complète & Repère *"
